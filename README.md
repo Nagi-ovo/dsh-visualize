@@ -2,6 +2,12 @@
 
 DSH 对话内生成式 UI 插件：模型调 `visualize` 工具，Web UI 里就地渲染成**可交互的沙箱卡片**——模拟器、图表、对比面板、UI mockup，超越纯文本的探索。
 
+<div align="center">
+
+https://github.com/user-attachments/assets/93ff08ef-cf32-4a87-bf63-274c1a0a71e2
+
+</div>
+
 | 组成 | 作用 |
 |---|---|
 | `visualize` 工具 | 读 fragment 文件、按契约校验，把内容内联进持久化 `tool/result` meta（模型上下文只出现路径，replay 永远可渲染） |
