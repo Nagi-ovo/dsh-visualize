@@ -26,6 +26,9 @@ importers:
       '@deepseek-ai/dsh-llm':
         specifier: link:../../.dsh/source/current/packages/llm/llm
         version: link:../../.dsh/source/current/packages/llm/llm
+      '@deepseek-ai/dsh-sandbox-policy':
+        specifier: link:../../.dsh/source/current/packages/sandbox/sandbox-policy
+        version: link:../../.dsh/source/current/packages/sandbox/sandbox-policy
       '@deepseek-ai/dsh-session':
         specifier: link:../../.dsh/source/current/packages/core/session
         version: link:../../.dsh/source/current/packages/core/session

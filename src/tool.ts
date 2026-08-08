@@ -15,6 +15,8 @@ import type { Context } from 'cordis'
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 // Type-only: pulls the `ctx.fs` Context merge.
 import type {} from '@deepseek-ai/dsh-fs'
+// Type-only: pulls the `ctx.get('sandboxPolicy')` Context merge.
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { validateFragment, visualizeMetaFrom, VISUALIZE_TOOL_NAME, type VisualizeMode } from './fragment.ts'
 
 export { VISUALIZE_TOOL_NAME } from './fragment.ts'
@@ -92,12 +94,19 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
       // resolved against the calling agent's session workspace (mirroring the
       // official fs tools); a re-render of identical bytes reuses its name.
       const relative = `viz/${slugOf(title)}-${contentHash(args.fragment)}.html`
-      const cwd = exec.agent?.session.header.cwd
+      // Session-level sandbox policy, as the official fs tools resolve it: the
+      // calling session's cwd becomes the workspace root. Without this, a
+      // confining backend falls back to its process-level default root and
+      // denies the write whenever the session cwd lies elsewhere.
+      const sandboxPolicy = ctx.get('sandboxPolicy')?.resolve({
+        ...exec.agent ? { session: exec.agent.session } : {},
+      })
+      const cwd = sandboxPolicy?.workspaceRoot ?? exec.agent?.session.header.cwd
       const target = await ctx.fs.resolve(relative, {
         ...cwd !== undefined ? { cwd } : {},
         signal: exec.signal,
       })
-      await ctx.fs.writeText(target, args.fragment, undefined, exec.signal)
+      await ctx.fs.writeText(target, args.fragment, undefined, exec.signal, sandboxPolicy)
       return {
         path: target.displayPath,
         title,

@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-visualize",
   "description": "DSH inline visualization plugin: a visualize tool + bundled skill let the model render interactive HTML fragments as sandboxed cards in the conversation (Codex /visualize semantics).",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
@@ -42,6 +42,7 @@
   "peerDependencies": {
     "@deepseek-ai/dsh-fs": "*",
     "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-sandbox-policy": "*",
     "@deepseek-ai/dsh-session": "*",
     "@deepseek-ai/dsh-skill": "*",
     "@deepseek-ai/dsh-tools": "*",
@@ -56,6 +57,7 @@
     "@deepseek-ai/dsh-client-ui-tool": "link:../../.dsh/source/current/packages/client/ui-tool",
     "@deepseek-ai/dsh-fs": "link:../../.dsh/source/current/packages/fs/fs",
     "@deepseek-ai/dsh-llm": "link:../../.dsh/source/current/packages/llm/llm",
+    "@deepseek-ai/dsh-sandbox-policy": "link:../../.dsh/source/current/packages/sandbox/sandbox-policy",
     "@deepseek-ai/dsh-session": "link:../../.dsh/source/current/packages/core/session",
     "@deepseek-ai/dsh-skill": "link:../../.dsh/source/current/packages/skill/skill",
     "@deepseek-ai/dsh-tools": "link:../../.dsh/source/current/packages/core/tools",
