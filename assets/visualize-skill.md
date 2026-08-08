@@ -64,6 +64,10 @@ Content-Security-Policy. The tool rejects violations loudly.
   with a pinned version.
 - Every color comes from a theme variable or a `light-dark()` pair — the
   token list and utility classes are in `references/design.md`.
+- Never declare `color-scheme` yourself. The document already carries the
+  host's scheme; redeclaring it on your root flips every `light-dark()` in
+  your subtree to the viewer's OS preference, which can invert your text
+  against the host-matched background.
 - A chart's first draw animates in, once; `references/charts.md` has the
   recipes (Chart.js gives this by default).
 - Before finishing, confirm every element your script queries exists, every

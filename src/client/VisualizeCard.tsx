@@ -65,7 +65,10 @@ function Frame({ meta, callId }: { meta: VisualizeMeta; callId: string }) {
   useEffect(() => {
     const bump = () => setThemeTick(tick => tick + 1)
     const observer = new MutationObserver(bump)
+    // Both mount points: DSH toggles dark via a body attribute, other hosts
+    // conventionally re-theme via root-element attributes.
     observer.observe(document.documentElement, { attributes: true })
+    observer.observe(document.body, { attributes: true })
     const media = matchMedia('(prefers-color-scheme: dark)')
     media.addEventListener('change', bump)
     return () => {

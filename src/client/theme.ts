@@ -1,9 +1,13 @@
 /**
  * Host-theme resolution shared by the settled card and the streaming preview:
  * reads the DSH `--dsw-alias-*` design tokens (whale-blue brand accent
- * included) off the document root and derives the host color scheme. Missing
- * tokens resolve to empty strings the shell drops, so the frame stylesheet's
- * `light-dark()` fallbacks apply outside DSH.
+ * included) off `document.body` and derives the host color scheme. The body is
+ * the read point because DSH mounts the token definitions there (dark override
+ * under `body[data-ds-dark-theme]`), and custom properties only cascade
+ * DOWNWARD — a `:root`-mounted theme still reaches the body by inheritance,
+ * the reverse read never works. Missing tokens resolve to empty strings the
+ * shell drops, so the frame stylesheet's `light-dark()` fallbacks apply
+ * outside DSH.
  */
 
 /** Host design token → frame variable bridge (values resolved per render). */
@@ -27,7 +31,7 @@ export interface ResolvedTheme {
  * @returns the palette map and scheme for {@link buildFrameDoc}.
  */
 export function resolveTheme(): ResolvedTheme {
-  const computed = getComputedStyle(document.documentElement)
+  const computed = getComputedStyle(document.body)
   const themeVars: Record<string, string> = {}
   for (const [frameName, hostToken] of TOKEN_BRIDGE) {
     themeVars[frameName] = computed.getPropertyValue(hostToken)
@@ -35,8 +39,10 @@ export function resolveTheme(): ResolvedTheme {
   const scheme = computed.colorScheme
   const colorScheme = scheme.includes('dark') && !scheme.includes('light')
     ? 'dark'
-    : scheme.includes('light')
+    : scheme.includes('light') && !scheme.includes('dark')
       ? 'light'
-      : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      : document.body.hasAttribute('data-ds-dark-theme')
+        ? 'dark'
+        : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   return { themeVars, colorScheme }
 }
