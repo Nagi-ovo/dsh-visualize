@@ -1,0 +1,55 @@
+<!-- Worked example: a compact grouped comparison with direct labels and a
+     hover detail. Idioms on display: neutral structure with the accent only
+     on the leader, direct value labels instead of a legend, one hover detail
+     line instead of a tooltip layer, no gridlines. -->
+<div id="cmp-langs">
+  <h3>Build time by toolchain</h3>
+  <svg id="cmp-langs-plot" width="100%" height="150" role="img" aria-label="Build time comparison"></svg>
+  <div class="text-small" id="cmp-langs-detail" style="min-height: 1.5em;">Hover a bar for the breakdown.</div>
+</div>
+<script>
+(function () {
+  var DATA = [
+    { name: 'esbuild', seconds: 0.4, note: 'Go, parallel from the start' },
+    { name: 'rolldown', seconds: 0.9, note: 'Rust, Rollup-compatible API' },
+    { name: 'rollup', seconds: 6.8, note: 'JS, plugin ecosystem pioneer' },
+    { name: 'webpack', seconds: 11.2, note: 'JS, richest loader ecosystem' },
+  ];
+  var root = document.getElementById('cmp-langs');
+  var svg = document.getElementById('cmp-langs-plot');
+  var detail = document.getElementById('cmp-langs-detail');
+  var best = Math.min.apply(null, DATA.map(function (d) { return d.seconds; }));
+  var max = Math.max.apply(null, DATA.map(function (d) { return d.seconds; }));
+
+  function draw() {
+    var w = svg.clientWidth || 600, rowH = 34, labelW = 84, valueW = 56;
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + DATA.length * rowH);
+    svg.innerHTML = DATA.map(function (d, i) {
+      var y = i * rowH, barMax = w - labelW - valueW;
+      var barW = Math.max(2, d.seconds / max * barMax);
+      var lead = d.seconds === best;
+      return '<g data-index="' + i + '">' +
+        '<text x="0" y="' + (y + 21) + '">' + d.name + '</text>' +
+        '<rect x="' + labelW + '" y="' + (y + 8) + '" width="' + barW.toFixed(1) + '" height="18" rx="3" ' +
+          'fill="' + (lead ? 'var(--viz-series-1)' : 'var(--border)') + '"/>' +
+        '<text x="' + (labelW + barW + 8).toFixed(1) + '" y="' + (y + 21) + '" ' +
+          'style="font-variant-numeric: tabular-nums;"' + (lead ? ' font-weight="500"' : '') + '>' +
+          d.seconds.toFixed(1) + 's</text>' +
+        '</g>';
+    }).join('');
+  }
+
+  svg.addEventListener('pointermove', function (event) {
+    var group = event.target.closest('g[data-index]');
+    if (!group) return;
+    var d = DATA[Number(group.getAttribute('data-index'))];
+    detail.textContent = d.name + ' · ' + d.seconds.toFixed(1) + 's — ' + d.note;
+  });
+  svg.addEventListener('pointerleave', function () {
+    detail.textContent = 'Hover a bar for the breakdown.';
+  });
+
+  new ResizeObserver(draw).observe(root);
+  draw();
+})();
+</script>

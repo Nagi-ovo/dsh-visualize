@@ -1,0 +1,4 @@
+# lib/ is committed on purpose: installation is clone + `dsh plugin add` with
+# no prepare step (the dsh-hub convention); rebuild with `pnpm run build`.
+node_modules/
+*.tsbuildinfo
