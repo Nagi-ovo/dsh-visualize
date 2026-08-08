@@ -15,7 +15,7 @@ import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls the `conversation.input.dock` SlotMap declaration.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { extractStreamingFragment, trimStreamingScripts, VISUALIZE_TOOL_NAME } from '../fragment.ts'
-import { buildStreamShellDoc, STREAM_MESSAGE_TYPE } from '../shell.ts'
+import { buildStreamShellDoc, HEIGHT_MESSAGE_TYPE, STREAM_MESSAGE_TYPE } from '../shell.ts'
 import { resolveTheme } from './theme.ts'
 
 /** Dock entry props: the InputZone owner share (live conversation snapshot). */
@@ -29,12 +29,13 @@ type StreamingPreviewProps = PropsRuntime<'conversation.input.dock'>
 const FLUSH_MS = 150
 
 /**
- * Fixed preview height once renderable content exists: the dock must not pump
- * the composer's layout per token. Before the first renderable markup arrives
- * the frame stays collapsed — reserving the full height against a blank shell
- * reads as a layout bug, not as anticipation.
+ * Preview height ceiling. The frame tracks the shell's *measured* content
+ * height (its height reports), so invisible early markup — style blocks,
+ * empty containers — keeps the frame collapsed and painted components grow
+ * it; the cap stops a tall fragment from crowding out the composer. Reserving
+ * space no paint has claimed reads as a layout bug, not as anticipation.
  */
-const PREVIEW_HEIGHT = 300
+const PREVIEW_MAX_HEIGHT = 300
 
 /**
  * The input dock spans the conversation view, not the composer column, so the
@@ -92,6 +93,19 @@ function Preview({ argsRaw }: { argsRaw: string }) {
   const hasContent = preview.trim().length > 0
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [contentHeight, setContentHeight] = useState(0)
+  // Follow the shell's height reports so the frame hugs what is actually
+  // painted; the CSS transition turns each growth step into a smooth reveal.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const report = event.data as { type?: unknown; token?: unknown; height?: unknown } | null
+      if (report?.type !== HEIGHT_MESSAGE_TYPE || report.token !== 'streaming-preview') return
+      if (typeof report.height !== 'number' || !Number.isFinite(report.height)) return
+      setContentHeight(Math.max(0, Math.ceil(report.height)))
+    }
+    addEventListener('message', onMessage)
+    return () => removeEventListener('message', onMessage)
+  }, [])
   // The shell loads ONCE per streaming call; updates flow over postMessage
   // and sync incrementally, so unchanged components persist and new ones
   // float in instead of the whole frame reloading per flush.
@@ -118,7 +132,7 @@ function Preview({ argsRaw }: { argsRaw: string }) {
         referrerPolicy="no-referrer"
         title="Visualization streaming preview"
         srcDoc={doc}
-        style={{ ...frameStyle, height: hasContent ? PREVIEW_HEIGHT : 0 }}
+        style={{ ...frameStyle, height: hasContent ? Math.min(contentHeight, PREVIEW_MAX_HEIGHT) : 0 }}
         onLoad={() => setLoaded(true)}
       />
     </div>
