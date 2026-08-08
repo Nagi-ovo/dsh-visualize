@@ -28,7 +28,12 @@ type StreamingPreviewProps = PropsRuntime<'conversation.input.dock'>
  */
 const FLUSH_MS = 150
 
-/** Fixed preview height: the dock must not pump the composer's layout per token. */
+/**
+ * Fixed preview height once renderable content exists: the dock must not pump
+ * the composer's layout per token. Before the first renderable markup arrives
+ * the frame stays collapsed — reserving the full height against a blank shell
+ * reads as a layout bug, not as anticipation.
+ */
 const PREVIEW_HEIGHT = 300
 
 /**
@@ -46,9 +51,9 @@ const labelStyle: CSSProperties = {
 const frameStyle: CSSProperties = {
   display: 'block',
   width: '100%',
-  height: PREVIEW_HEIGHT,
   border: 0,
   background: 'transparent',
+  transition: 'height 240ms ease',
 }
 
 /**
@@ -83,6 +88,8 @@ function useThrottled(value: string): string {
 function Preview({ argsRaw }: { argsRaw: string }) {
   const throttled = useThrottled(argsRaw)
   const fragment = extractStreamingFragment(throttled)
+  const preview = fragment === undefined ? '' : trimStreamingScripts(fragment)
+  const hasContent = preview.trim().length > 0
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const [loaded, setLoaded] = useState(false)
   // The shell loads ONCE per streaming call; updates flow over postMessage
@@ -93,17 +100,17 @@ function Preview({ argsRaw }: { argsRaw: string }) {
     reportToken: 'streaming-preview',
   }), [])
   useEffect(() => {
-    if (!loaded || fragment === undefined) return
+    if (!loaded || !hasContent) return
     frameRef.current?.contentWindow?.postMessage({
       type: STREAM_MESSAGE_TYPE,
       token: 'streaming-preview',
-      fragment: trimStreamingScripts(fragment),
+      fragment: preview,
     }, '*')
-  }, [loaded, fragment])
+  }, [loaded, hasContent, preview])
   return (
     <div style={wrapStyle}>
       <div style={labelStyle}>
-        {fragment === undefined || fragment.length === 0 ? 'Visualize · composing…' : 'Visualize · streaming preview'}
+        {hasContent ? 'Visualize · streaming preview' : 'Visualize · composing…'}
       </div>
       <iframe
         ref={frameRef}
@@ -111,7 +118,7 @@ function Preview({ argsRaw }: { argsRaw: string }) {
         referrerPolicy="no-referrer"
         title="Visualization streaming preview"
         srcDoc={doc}
-        style={frameStyle}
+        style={{ ...frameStyle, height: hasContent ? PREVIEW_HEIGHT : 0 }}
         onLoad={() => setLoaded(true)}
       />
     </div>

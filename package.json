@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-visualize",
   "description": "DSH inline visualization plugin: a visualize tool + bundled skill let the model render interactive HTML fragments as sandboxed cards in the conversation (Codex /visualize semantics).",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
