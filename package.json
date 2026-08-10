@@ -31,13 +31,13 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
     }
-  },
-  "dshClient": {
-    "inject": [
-      "@deepseek-ai/dsh-client-runtime"
-    ],
-    "platform": "web"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-fs": "*",
