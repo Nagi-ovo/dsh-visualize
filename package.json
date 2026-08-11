@@ -19,8 +19,7 @@
     "lib",
     "src",
     "assets",
-    "cordis.patch.yml",
-    "dsh.plugin.json"
+    "cordis.patch.yml"
   ],
   "scripts": {
     "build": "tsdown",
