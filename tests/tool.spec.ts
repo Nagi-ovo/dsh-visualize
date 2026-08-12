@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import { visualizeTool } from '../src/tool.ts'
 
 /**

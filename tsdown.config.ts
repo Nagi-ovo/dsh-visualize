@@ -4,7 +4,7 @@
  * All @deepseek-ai packages are type-only imports (erased at build); the node
  * half keeps schemastery unbundled because the Loader validates the plugin's
  * `Config` schema and must see its own schemastery instance; the browser half
- * keeps the platform module table external (react, cordis, loader seeds) and
+ * keeps the platform module table external (React, Cordis, loader seeds) and
  * bundles everything else inline.
  */
 import type { UserConfig } from 'tsdown'
@@ -13,10 +13,11 @@ const PLUGIN_ID = '@dsh-external/dsh-visualize'
 
 /** Module specifiers the dsh web shell shares into its frozen module table. */
 const PLATFORM_MODULES = [
-  'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', 'cordis',
+  'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/cordis',
   '@deepseek-ai/dsh-client-ui-slots',
   '@deepseek-ai/dsh-client-web-react',
   '@deepseek-ai/dsh-client-ui-primitives',
+  '@deepseek-ai/dsh-client-ui-attachment',
   '@deepseek-ai/dsh-client-schema-form',
 ] as const
 
@@ -37,7 +38,7 @@ export default [
       // schemastery stays unbundled because the Loader validates the plugin's
       // `Config` schema and must see its own schemastery instance; cordis is
       // type-only in this bundle.
-      neverBundle: ['schemastery', 'cordis'],
+      neverBundle: ['@deepseek-ai/schemastery', '@deepseek-ai/cordis'],
     },
   },
   {

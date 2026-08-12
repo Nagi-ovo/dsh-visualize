@@ -1,6 +1,6 @@
-import z from "schemastery";
+import z from "@deepseek-ai/schemastery";
 import "@deepseek-ai/dsh-tools";
-import { Context } from "cordis";
+import { Context } from "@deepseek-ai/cordis";
 //#region src/fragment.d.ts
 /**
  * Pure fragment contract shared by the tool (validation at execute time), the

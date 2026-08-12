@@ -11,7 +11,7 @@
  * @module @dsh-external/dsh-visualize/tool
  */
 
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 // Type-only: pulls the `ctx.fs` Context merge.
 import type {} from '@deepseek-ai/dsh-fs'

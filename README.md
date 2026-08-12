@@ -20,13 +20,14 @@ https://github.com/user-attachments/assets/93ff08ef-cf32-4a87-bf63-274c1a0a71e2
 
 ```sh
 git clone https://github.com/dsh-external/dsh-visualize.git
-dsh plugin --profile web add link:/path/to/dsh-visualize
+cd /path/to/deepseek-harness
+pnpm dsh plugin --profile web add link:/path/to/dsh-visualize
 # 重启 dsh web，刷新页面
 ```
 
 配置行由 bundle patch 自动插入，无需手动编辑 cordis.patch.yml。
 
-装了社区 [plugin-registry](https://github.com/dsh-external/plugin-registry) 的用户也可以走它的通道（与上面的官方通道二选一）：设置页「插件」面板安装，或 `dsh registry install /path/to/dsh-visualize`。
+装了社区 [plugin-registry](https://github.com/dsh-external/plugin-registry) 的用户也可以在设置页「插件」面板安装；最新 DSH 已移除旧的 `dsh registry` 命令。
 
 开发者改源码后：`pnpm install && pnpm run check`（typecheck + 测试 + 重新构建 `lib/`）。
 

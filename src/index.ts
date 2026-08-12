@@ -9,8 +9,8 @@
  * @module @dsh-external/dsh-visualize
  */
 
-import type { Context } from 'cordis'
-import z from 'schemastery'
+import type { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import { visualizeTool } from './tool.ts'
 import { visualizeSkillProvider } from './skill.ts'
 
