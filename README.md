@@ -4,7 +4,7 @@ DSH 对话内生成式 UI 插件：模型调 `visualize` 工具，Web UI 里就�
 
 <div align="center">
 
-https://github.com/user-attachments/assets/93ff08ef-cf32-4a87-bf63-274c1a0a71e2
+[![DSH 对话内生成交互式可视化演示](assets/demo.webp)](assets/demo.mp4)
 
 </div>
 
@@ -19,7 +19,7 @@ https://github.com/user-attachments/assets/93ff08ef-cf32-4a87-bf63-274c1a0a71e2
 构建产物随仓库分发（`lib/` 已提交），无 install、无 build、无运行时依赖：
 
 ```sh
-git clone https://github.com/dsh-external/dsh-visualize.git
+git clone https://github.com/Nagi-ovo/dsh-visualize.git
 cd /path/to/deepseek-harness
 pnpm dsh plugin --profile web add link:/path/to/dsh-visualize
 # 重启 dsh web，刷新页面
