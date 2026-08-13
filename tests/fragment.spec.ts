@@ -1,5 +1,43 @@
 import { describe, expect, it } from 'vitest'
-import { extractStreamingFragment, trimStreamingScripts, validateFragment, visualizeMetaFrom } from '../src/fragment.ts'
+import {
+  applyFragmentPatch,
+  extractStreamingFragment,
+  trimStreamingScripts,
+  validateFragment,
+  visualizeMetaFrom,
+} from '../src/fragment.ts'
+
+describe('applyFragmentPatch', () => {
+  it('replaces the single matching site and leaves the rest byte-identical', () => {
+    const base = '<div id="lab"><h2>Latency</h2><p>p99 480ms</p></div>'
+    expect(applyFragmentPatch(base, 'p99 480ms', 'p99 120ms'))
+      .toBe('<div id="lab"><h2>Latency</h2><p>p99 120ms</p></div>')
+  })
+
+  it('deletes the matched region when new_str is empty', () => {
+    expect(applyFragmentPatch('<p>keep</p><p>drop</p>', '<p>drop</p>', '')).toBe('<p>keep</p>')
+  })
+
+  it('refuses an ambiguous old_str and names how many sites matched', () => {
+    expect(() => applyFragmentPatch('<td>0</td><td>0</td><td>0</td>', '<td>0</td>', '<td>1</td>'))
+      .toThrow(/appears 3 times/)
+  })
+
+  it('reports where a near-miss diverged, quoting the card\'s real bytes', () => {
+    const base = '<div class="viz-stat"><span>P99 latency</span></div>'
+    expect(() => applyFragmentPatch(base, '<span>P99 latency is 480ms</span>', '<span>ok</span>'))
+      .toThrow(/first \d+ characters do match, at offset 22, where the card actually reads "<span>P99 latency<\/span>/)
+  })
+
+  it('tells the caller to re-render when nothing matched at all', () => {
+    expect(() => applyFragmentPatch('<div>chart</div>', 'zzzzzzzzzzzzzzzzz', 'x'))
+      .toThrow(/None of it matched/)
+  })
+
+  it('rejects an empty old_str rather than inserting at the start', () => {
+    expect(() => applyFragmentPatch('<div>x</div>', '', 'y')).toThrow(/old_str is empty/)
+  })
+})
 
 describe('validateFragment', () => {
   it('accepts an inline fragment and returns its UTF-8 size', () => {

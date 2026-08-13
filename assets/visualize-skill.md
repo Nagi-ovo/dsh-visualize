@@ -35,11 +35,32 @@ first chart, read `references/charts.md`; before styling anything, read
 Pass the markup directly as the `fragment` argument, with an optional `title`
 and optional `mode`. The card starts rendering while you are still generating,
 and a copy of the finished fragment lands in the session workspace under
-`viz/`. To revise a visualization, call the tool again with the new markup.
+`viz/`.
 
 Reserve `mode: "wide"` for layouts where several compact panels must sit
 beside each other to be compared; a single dense chart or a full-page mockup
 stays at the default width.
+
+## Revising a card
+
+Correcting a rendered card by re-sending its whole markup costs as much as
+drawing it again and invites unrequested redesign, so patch it instead:
+`action: "update"` with the card's `path`, its `title` restated, and one exact
+`old_str` → `new_str` replacement.
+
+- Patch when the correction touches fewer than 20 lines in fewer than 5
+  places, and at most 4 times per reply. Re-create the card for anything
+  structural or larger — a patch series is not a rewrite.
+- `old_str` must match the current card byte for byte, whitespace included,
+  and appear exactly once. Keep it as short as stays unique; an empty
+  `new_str` deletes the matched region.
+- A card keeps one `path` for its whole life; patches rewrite that file, so
+  several patches in one reply each build on the one before.
+- A refused patch tells you what the card actually contains at the site you
+  aimed at. Correct `old_str` from that and retry in the same reply rather
+  than re-rendering blind.
+- The card reloads on every change, so anything the user typed, dragged, or
+  scrolled inside it resets. Batch corrections instead of trickling them.
 
 ## Fragment rules
 
@@ -49,6 +70,11 @@ Content-Security-Policy. The tool rejects violations loudly.
 - Fragment only — never emit `<!doctype>`, `<html>`, `<head>`, or `<body>`.
 - Emit real markup with actual newlines, not a string-escaped rendition
   (`\"`, `\n`) of it.
+- Write every user-visible label, caption, control, tooltip, and annotation in
+  the language the user primarily uses in the current conversation, unless
+  they request another language. Keep established product names and technical
+  terms unchanged when translating them would make the visualization less
+  precise.
 - Give your root element a unique ID and locate it with
   `document.getElementById(...)`. Scripts must not rely on
   `document.currentScript` to find their root.
