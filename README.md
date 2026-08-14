@@ -1,40 +1,42 @@
 # dsh-visualize
 
+![dsh-visualize](assets/social-preview.jpg)
+
 <p align="center">
-  <strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
+  <strong>简体中文</strong> | <a href="README.en.md">English</a>
 </p>
 
-DSH does not have to answer with text alone. When the model calls `visualize`, the Web UI renders an interactive card inside the conversation for simulators, charts, comparison panels, and UI mockups.
+让 DSH 不只回答一段文字。模型调用 `visualize` 后，Web UI 会在对话里直接出现一张可交互卡片，用来做模拟器、图表、对比面板或 UI mockup。
 
 <div align="center">
 
-[![Interactive visualization rendered inside a DSH conversation](assets/demo.webp)](assets/demo.mp4)
+[![DSH 对话内生成交互式可视化演示](assets/demo.webp)](assets/demo.mp4)
 
 </div>
 
-## Install
+## 安装
 
-Install the plugin from GitHub into DSH's `web` profile:
+推荐直接从 GitHub 安装到 DSH 的 `web` profile：
 
 ```sh
 dsh plugin --profile web add github:Nagi-ovo/dsh-visualize
-# If dsh web is running, restart it and refresh the page.
+# 如果 dsh web 正在运行，重启后刷新页面
 ```
 
-Run `dsh --profile web --dump-config` to confirm that the plugin is present in the final configuration. For local development, clone the repository and run `dsh plugin --profile web add .` from its root; committed build output means no separate build step is required. Users of the community [plugin-registry](https://github.com/dsh-external/plugin-registry) can also install it from Settings → Plugins.
+可以运行 `dsh --profile web --dump-config` 确认插件已经进入最终配置。需要修改源码时，克隆仓库并在仓库目录运行 `dsh plugin --profile web add .`；构建产物已经提交，不需要额外构建。使用社区 [plugin-registry](https://github.com/dsh-external/plugin-registry) 的用户也可以从「设置 → 插件」安装。
 
-## Use it
+## 怎么用
 
-Tell the model what you want to explore, for example, “make an adjustable visualization of a sorting algorithm.” The model writes an HTML fragment, then calls `visualize(path, title?, mode?)` to place it in the conversation. Side-by-side comparisons can use `mode: "wide"`.
+直接告诉模型你想看什么，例如「做一个能调参数的排序算法可视化」。模型会写出一份 HTML fragment，再调用 `visualize(path, title?, mode?)` 把它放进对话。适合并排比较的内容可以使用 `mode: "wide"`。
 
-Cards follow the DSH light or dark theme and whale-blue palette. Session replay restores them from the persistent tool result, so the original fragment file does not need to remain on disk.
+卡片会跟随 DSH 的明暗主题和鲸鱼蓝配色。会话重放时，页面从持久化的工具结果恢复，不依赖原始 fragment 文件仍然存在。
 
-## Security
+## 安全
 
-Each card runs in a sandboxed iframe with an opaque origin and cannot access the host page. Its CSP blocks network requests, nested pages, and form submissions, while allowing static assets from a fixed set of CDNs. Fragments are limited to `1000000` bytes by default; change `maxFragmentBytes` to use a different limit.
+卡片运行在不透明来源的 sandboxed iframe 中，不能接触宿主页面。CSP 会阻止网络请求、嵌套页面和表单提交，只允许从固定 CDN 加载静态资源。单个 fragment 默认上限为 `1000000` 字节，可以通过 `maxFragmentBytes` 调整。
 
-## Limitations
+## 限制
 
-Interactive cards currently render only in the Web UI. TUI and headless clients show the standard tool result instead. Buttons inside a card cannot yet send follow-up messages to the conversation.
+目前只在 Web UI 中渲染交互卡片，TUI 和 headless 客户端会显示普通工具结果。卡片内的按钮暂时不能向主对话发送 follow-up 消息。
 
-Inspired by `/visualize` in the Codex desktop app. The layered skill references and Chart.js-first approach draw from [himself65/finance-skills](https://github.com/himself65/finance-skills/tree/main/plugins/ui-tools/skills/generative-ui).
+灵感来自 Codex 桌面端的 `/visualize`；skill 的分层 reference 和 Chart.js 优先路线借鉴了 [himself65/finance-skills](https://github.com/himself65/finance-skills/tree/main/plugins/ui-tools/skills/generative-ui)。
