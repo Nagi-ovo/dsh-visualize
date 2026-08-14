@@ -14,16 +14,14 @@ DSH does not have to answer with text alone. When the model calls `visualize`, t
 
 ## Install
 
-Build output is committed, so installation needs no separate build step:
+Install the plugin from GitHub into DSH's `web` profile:
 
 ```sh
-git clone https://github.com/Nagi-ovo/dsh-visualize.git
-cd /path/to/deepseek-harness
-pnpm dsh plugin --profile web add link:/path/to/dsh-visualize
-# Restart dsh web, then refresh the page.
+dsh plugin --profile web add github:Nagi-ovo/dsh-visualize
+# If dsh web is running, restart it and refresh the page.
 ```
 
-If you use the community [plugin-registry](https://github.com/dsh-external/plugin-registry), you can also install it from Settings → Plugins.
+Run `dsh --profile web --dump-config` to confirm that the plugin is present in the final configuration. For local development, clone the repository and run `dsh plugin --profile web add .` from its root; committed build output means no separate build step is required. Users of the community [plugin-registry](https://github.com/dsh-external/plugin-registry) can also install it from Settings → Plugins.
 
 ## Use it
 
