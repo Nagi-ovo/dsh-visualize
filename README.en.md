@@ -6,6 +6,10 @@
   <a href="README.md">简体中文</a> | <strong>English</strong>
 </p>
 
+<p align="center">
+  <a href="https://dshfind.com/en/plugins/Nagi-ovo/dsh-visualize?ref=badge"><img src="https://dshfind.com/api/card/Nagi-ovo/dsh-visualize?lang=en" alt="dsh-visualize on the dshfind plugin directory" width="440"></a>
+</p>
+
 DSH does not have to answer with text alone. When the model calls `visualize`, the Web UI renders an interactive card inside the conversation for simulators, charts, comparison panels, and UI mockups.
 
 <div align="center">
