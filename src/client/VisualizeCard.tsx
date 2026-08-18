@@ -120,21 +120,53 @@ function Frame({ meta, callId }: { meta: VisualizeMeta; callId: string }) {
 }
 
 /**
+ * Rebuild a descriptor from the call's own arguments when the settled form
+ * carries no persisted meta: nested dispatches (run_code's SDK tools) project
+ * presentation meta only for top-level calls, so the card reads the fragment
+ * from the wire arguments instead. Malformed or partial JSON declines to
+ * undefined — the caller keeps its quiet fallback.
+ */
+function visualizeMetaFromArgs(block: { call?: { argsRaw?: unknown }; argsRaw?: unknown }): VisualizeMeta | undefined {
+  const raw = block.call?.argsRaw ?? block.argsRaw
+  if (typeof raw !== 'string') return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return undefined
+  }
+  if (typeof parsed !== 'object' || parsed === null) return undefined
+  const record = parsed as { fragment?: unknown; title?: unknown; mode?: unknown }
+  if (typeof record.fragment !== 'string') return undefined
+  if (record.mode !== undefined && record.mode !== 'inline' && record.mode !== 'wide') return undefined
+  return {
+    kind: 'visualize',
+    fragment: record.fragment,
+    title: typeof record.title === 'string' && record.title.trim().length > 0 ? record.title.trim() : 'Visualization',
+    mode: record.mode === 'wide' ? 'wide' : 'inline',
+    path: '',
+  }
+}
+
+/**
  * Keyed toolview for the `visualize` tool. Running calls and malformed or
- * failed results stay quiet single lines; only a well-formed persisted meta
- * mounts the frame.
+ * failed results stay quiet single lines; a well-formed persisted meta — or
+ * the fragment in the call's own arguments for nested dispatches — mounts
+ * the frame.
  */
 export function VisualizeCard({ callId, block }: ToolCallViewProps) {
   if (!('kind' in block)) {
+    const live = visualizeMetaFromArgs(block)
+    if (live !== undefined) return <Frame meta={live} callId={callId} />
     return <div style={headerStyle}>Visualize · rendering…</div>
   }
   if (block.isError) {
     return <div style={headerStyle}>Visualize · {firstResultLine(block.content)}</div>
   }
-  const meta = visualizeMetaFrom(block.meta)
+  const meta = visualizeMetaFrom(block.meta) ?? visualizeMetaFromArgs(block)
   if (meta === undefined) {
-    // An older or foreign log without the descriptor: show the durable result
-    // text instead of guessing at markup.
+    // A settled call without either the descriptor or a parseable fragment:
+    // show the durable result text instead of guessing at markup.
     return <div style={headerStyle}>{firstResultLine(block.content)}</div>
   }
   return <Frame meta={meta} callId={callId} />
