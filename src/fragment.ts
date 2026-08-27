@@ -178,6 +178,81 @@ export function visualizeMetaFrom(meta: unknown): VisualizeMeta | undefined {
 }
 
 /**
+ * Rebuild a descriptor from the call's own arguments when persisted meta is
+ * missing. Nested dispatches (`run_code` / PTC) never project presentation
+ * meta, but they do log `arguments`; a create's fragment is in that JSON.
+ *
+ * An `update` without a fragment cannot be rebuilt from the wire (the patched
+ * markup lives in execute's value, which nested logs do not keep) and
+ * declines. Incomplete streaming JSON is not parsed via throw/catch: only a
+ * trailing `}` is treated as complete, otherwise a *closed* `"fragment"`
+ * string is taken through {@link extractStreamingFragment}'s scanner.
+ * @param argsRaw - running `block.argsRaw` or settled `block.call.argsRaw`.
+ * @returns a card descriptor, or `undefined` to keep the quiet fallback.
+ */
+export function visualizeMetaFromArgs(argsRaw: unknown): VisualizeMeta | undefined {
+  if (typeof argsRaw !== 'string' || argsRaw.length === 0) return undefined
+  const complete = parseCompleteArgs(argsRaw)
+  if (complete !== undefined) {
+    // Default action is create. Update's full markup is not in the arguments.
+    if (complete['action'] === 'update' && typeof complete['fragment'] !== 'string') return undefined
+    return descriptorFromFields(complete['fragment'], complete['title'], complete['mode'], complete['path'])
+  }
+  const closed = scanFragment(argsRaw, true)
+  if (closed === undefined) return undefined
+  return descriptorFromFields(closed, undefined, undefined, undefined)
+}
+
+/**
+ * Accept only a complete JSON object, gated on a trailing `}` so a streaming
+ * prefix never enters `JSON.parse`.
+ * @param raw - accumulated argument text.
+ * @returns the object, or `undefined` when the prefix is incomplete or illegal.
+ */
+function parseCompleteArgs(raw: string): Record<string, unknown> | undefined {
+  let end = raw.length
+  while (end > 0) {
+    const ch = raw[end - 1]!
+    if (ch === ' ' || ch === '\n' || ch === '\r' || ch === '\t') {
+      end -= 1
+      continue
+    }
+    break
+  }
+  if (end === 0 || raw[end - 1] !== '}') return undefined
+  try {
+    const parsed: unknown = JSON.parse(raw.slice(0, end))
+    if (typeof parsed !== 'object' || parsed === null) return undefined
+    return parsed as Record<string, unknown>
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Narrow wire fields into a descriptor. Empty markup after dropping a
+ * trailing half-script is declined rather than mounting a blank frame.
+ */
+function descriptorFromFields(
+  fragment: unknown,
+  title: unknown,
+  mode: unknown,
+  path: unknown,
+): VisualizeMeta | undefined {
+  if (typeof fragment !== 'string') return undefined
+  if (mode !== undefined && mode !== 'inline' && mode !== 'wide') return undefined
+  const markup = trimStreamingScripts(fragment)
+  if (markup.trim().length === 0) return undefined
+  return {
+    kind: 'visualize',
+    fragment: markup,
+    title: typeof title === 'string' && title.trim().length > 0 ? title.trim() : 'Visualization',
+    mode: mode === 'wide' ? 'wide' : 'inline',
+    path: typeof path === 'string' ? path : '',
+  }
+}
+
+/**
  * UTF-8 byte length without Buffer, so the browser bundle needs no polyfill.
  * @param text - the string to measure.
  * @returns its UTF-8 encoding length in bytes.
@@ -208,6 +283,18 @@ const JSON_ESCAPES: Record<string, string> = {
  * @returns the fragment decoded so far, or `undefined` before the opener streams in.
  */
 export function extractStreamingFragment(argsRaw: string): string | undefined {
+  return scanFragment(argsRaw, false)
+}
+
+/**
+ * Walk a possibly incomplete `"fragment":"...` value.
+ * @param argsRaw - accumulated argument text.
+ * @param requireClosed - when true, decline until the closing quote arrives
+ *   (the settled-card fallback must not mount on a half-streamed string).
+ * @returns the decoded fragment, or `undefined` when the opener is absent
+ *   or, if required, the string is still open.
+ */
+function scanFragment(argsRaw: string, requireClosed: boolean): string | undefined {
   const opener = /"fragment"\s*:\s*"/u.exec(argsRaw)
   if (!opener) return undefined
   let out = ''
@@ -219,22 +306,22 @@ export function extractStreamingFragment(argsRaw: string): string | undefined {
       continue
     }
     const next = argsRaw[i + 1]
-    if (next === undefined) return out // trailing lone backslash: escape still streaming
+    if (next === undefined) return requireClosed ? undefined : out
     if (next === 'u') {
       const hex = argsRaw.slice(i + 2, i + 6)
-      if (hex.length < 4) return out // \uXXXX still streaming
+      if (hex.length < 4) return requireClosed ? undefined : out
       const code = Number.parseInt(hex, 16)
-      if (Number.isNaN(code)) return out
+      if (Number.isNaN(code)) return requireClosed ? undefined : out
       out += String.fromCharCode(code)
       i += 5
       continue
     }
     const short = JSON_ESCAPES[next]
-    if (short === undefined) return out // malformed escape: stop rather than guess
+    if (short === undefined) return requireClosed ? undefined : out
     out += short
     i += 1
   }
-  return out
+  return requireClosed ? undefined : out
 }
 
 /** Matches the last script opener (complete or still missing its `>`). */

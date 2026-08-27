@@ -5,6 +5,7 @@ import {
   trimStreamingScripts,
   validateFragment,
   visualizeMetaFrom,
+  visualizeMetaFromArgs,
 } from '../src/fragment.ts'
 
 describe('applyFragmentPatch', () => {
@@ -75,6 +76,76 @@ describe('visualizeMetaFrom', () => {
     expect(visualizeMetaFrom({ ...valid, kind: 'artifact' })).toBeUndefined()
     expect(visualizeMetaFrom({ ...valid, fragment: 42 })).toBeUndefined()
     expect(visualizeMetaFrom({ ...valid, mode: 'full' })).toBeUndefined()
+  })
+})
+
+describe('visualizeMetaFromArgs', () => {
+  const create = JSON.stringify({
+    fragment: '<div id="lab">ok</div>',
+    title: 'Latency',
+    mode: 'wide',
+    path: 'viz/lab.html',
+  })
+
+  it('rebuilds a nested create from complete arguments', () => {
+    expect(visualizeMetaFromArgs(create)).toEqual({
+      kind: 'visualize',
+      fragment: '<div id="lab">ok</div>',
+      title: 'Latency',
+      mode: 'wide',
+      path: 'viz/lab.html',
+    })
+  })
+
+  it('defaults title and mode on a fragment-only create', () => {
+    expect(visualizeMetaFromArgs(JSON.stringify({ fragment: '<p>x</p>' }))).toEqual({
+      kind: 'visualize',
+      fragment: '<p>x</p>',
+      title: 'Visualization',
+      mode: 'inline',
+      path: '',
+    })
+  })
+
+  it('declines a nested update that has no fragment to rebuild from', () => {
+    expect(visualizeMetaFromArgs(JSON.stringify({
+      action: 'update',
+      path: 'viz/lab.html',
+      title: 'Latency',
+      old_str: 'ok',
+      new_str: 'p99',
+    }))).toBeUndefined()
+  })
+
+  it('accepts an update that restates the fragment', () => {
+    expect(visualizeMetaFromArgs(JSON.stringify({
+      action: 'update',
+      fragment: '<div id="lab">p99</div>',
+      title: 'Latency',
+      path: 'viz/lab.html',
+    }))?.fragment).toBe('<div id="lab">p99</div>')
+  })
+
+  it('does not JSON.parse a streaming prefix', () => {
+    expect(visualizeMetaFromArgs('{"fragment": "<div>hi')).toBeUndefined()
+    expect(visualizeMetaFromArgs('{"fragment": "<div>hi\\')).toBeUndefined()
+  })
+
+  it('uses a closed fragment string even when later keys are still streaming', () => {
+    expect(visualizeMetaFromArgs('{"fragment": "<div id=\\"x\\">a</div>", "title": "La')).toEqual({
+      kind: 'visualize',
+      fragment: '<div id="x">a</div>',
+      title: 'Visualization',
+      mode: 'inline',
+      path: '',
+    })
+  })
+
+  it('declines illegal mode, empty markup, and non-strings', () => {
+    expect(visualizeMetaFromArgs(JSON.stringify({ fragment: '<p>x</p>', mode: 'full' }))).toBeUndefined()
+    expect(visualizeMetaFromArgs(JSON.stringify({ fragment: '   ' }))).toBeUndefined()
+    expect(visualizeMetaFromArgs(undefined)).toBeUndefined()
+    expect(visualizeMetaFromArgs(42)).toBeUndefined()
   })
 })
 
