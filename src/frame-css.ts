@@ -11,7 +11,7 @@
  * the `--dsh-viz-*` values on the frame's `:root`; outside DSH the fallbacks
  * keep the frame legible in both appearances via `light-dark()`.
  *
- * @module @dsh-external/dsh-visualize/frame-css
+ * @module @nagi-ovo/dsh-visualize/frame-css
  */
 
 /** The frame stylesheet, inlined into the sandboxed srcdoc document. */

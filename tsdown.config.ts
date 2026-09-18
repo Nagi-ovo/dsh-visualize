@@ -9,7 +9,7 @@
  */
 import type { UserConfig } from 'tsdown'
 
-const PLUGIN_ID = '@dsh-external/dsh-visualize'
+const PLUGIN_ID = '@nagi-ovo/dsh-visualize'
 
 /** Module specifiers the dsh web shell shares into its frozen module table. */
 const PLATFORM_MODULES = [

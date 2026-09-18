@@ -8,7 +8,7 @@
  * is also written to the session workspace as an exportable artifact, and the
  * model-facing result stays a one-line confirmation.
  *
- * @module @dsh-external/dsh-visualize/tool
+ * @module @nagi-ovo/dsh-visualize/tool
  */
 
 import type { Context } from '@deepseek-ai/cordis'

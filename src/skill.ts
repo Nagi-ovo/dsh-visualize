@@ -4,7 +4,7 @@
  * `dsh-skill-badge` provider shape — one bundled candidate whose body ships
  * in this package's `assets/`.
  *
- * @module @dsh-external/dsh-visualize/skill
+ * @module @nagi-ovo/dsh-visualize/skill
  */
 
 import { readFile } from 'node:fs/promises'

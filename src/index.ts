@@ -6,7 +6,7 @@
  * documented render-intent degradation, so TUI and headless surfaces keep
  * working with the fragment path alone.
  *
- * @module @dsh-external/dsh-visualize
+ * @module @nagi-ovo/dsh-visualize
  */
 
 import type { Context } from '@deepseek-ai/cordis'

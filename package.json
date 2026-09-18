@@ -1,8 +1,7 @@
 {
-  "name": "@dsh-external/dsh-visualize",
+  "name": "@nagi-ovo/dsh-visualize",
   "description": "DSH inline visualization plugin: a visualize tool + bundled skill let the model render interactive HTML fragments as sandboxed cards in the conversation (Codex /visualize semantics).",
   "version": "0.1.2",
-  "private": true,
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -25,7 +24,19 @@
     "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.client.json",
     "test": "vitest run",
-    "check": "pnpm run typecheck && pnpm run test && pnpm run build"
+    "check": "pnpm run typecheck && pnpm run test && pnpm run build",
+    "prepublishOnly": "pnpm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nagi-ovo/dsh-visualize.git"
+  },
+  "homepage": "https://github.com/Nagi-ovo/dsh-visualize#readme",
+  "bugs": {
+    "url": "https://github.com/Nagi-ovo/dsh-visualize/issues"
   },
   "dsh": {
     "bundle": {

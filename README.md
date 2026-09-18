@@ -20,14 +20,14 @@
 
 ## 安装
 
-推荐直接从 GitHub 安装到 DSH 的 `web` profile：
+推荐用 npm 装到 DSH 的 `web` profile：
 
 ```sh
-dsh plugin --profile web add github:Nagi-ovo/dsh-visualize
+dsh plugin --profile web add @nagi-ovo/dsh-visualize
 # 如果 dsh web 正在运行，重启后刷新页面
 ```
 
-可以运行 `dsh --profile web --dump-config` 确认插件已经进入最终配置。需要修改源码时，克隆仓库并在仓库目录运行 `dsh plugin --profile web add .`；构建产物已经提交，不需要额外构建。使用社区 [plugin-registry](https://github.com/dsh-external/plugin-registry) 的用户也可以从「设置 → 插件」安装。
+也可以从 GitHub 安装：`dsh plugin --profile web add github:Nagi-ovo/dsh-visualize`。可以运行 `dsh --profile web --dump-config` 确认插件已经进入最终配置。需要修改源码时，克隆仓库并在仓库目录运行 `dsh plugin --profile web add .`；构建产物已经提交，不需要额外构建。使用社区 [plugin-registry](https://github.com/dsh-external/plugin-registry) 的用户也可以从「设置 → 插件」安装。
 
 ## 怎么用
 

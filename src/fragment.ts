@@ -9,7 +9,7 @@
  * fragment that ships its own `<!doctype>`/`<html>`/`<head>`/`<body>` would
  * nest documents and is rejected loudly instead of rendered broken.
  *
- * @module @dsh-external/dsh-visualize/fragment
+ * @module @nagi-ovo/dsh-visualize/fragment
  */
 
 /**

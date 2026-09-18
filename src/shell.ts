@@ -11,7 +11,7 @@
  * posts. The allowlist is a protocol constant shared with the bundled skill
  * text, not configuration.
  *
- * @module @dsh-external/dsh-visualize/shell
+ * @module @nagi-ovo/dsh-visualize/shell
  */
 
 import { FRAME_CSS } from './frame-css.ts'
