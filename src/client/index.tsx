@@ -5,7 +5,9 @@
  * generic result text by the documented toolview fallback.
  */
 
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+// Type-only: pulls the `ctx.slots` Context merge.
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the `tool.call.toolview` SlotMap declaration.
 import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
 // Type-only: pulls the `conversation.input.dock` SlotMap declaration.
