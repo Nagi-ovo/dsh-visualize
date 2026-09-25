@@ -18,9 +18,16 @@ import {
 
 const PROVIDER_NAME = 'dsh-visualize'
 const SKILL_BODY_URL = new URL('../assets/visualize-skill.md', import.meta.url)
+
+/** Absolute path of the skill body, for agents that cannot load skills. */
+export const SKILL_BODY_PATH = fileURLToPath(SKILL_BODY_URL)
+
+/** Absolute directory the skill body's relative references resolve against. */
+export const SKILL_RESOURCE_DIR = fileURLToPath(new URL('../assets/', import.meta.url))
+
 const RESOURCE_BASE = {
   kind: 'directory',
-  path: fileURLToPath(new URL('../assets/', import.meta.url)),
+  path: SKILL_RESOURCE_DIR,
 } as const
 const INVOCATION = { modelInvocable: true, userInvocable: true } as const
 const DESCRIPTION =

@@ -17,6 +17,7 @@ import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { FsTarget } from '@deepseek-ai/dsh-fs'
 // Type-only: pulls the `ctx.get('sandboxPolicy')` Context merge.
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import { SKILL_BODY_PATH, SKILL_RESOURCE_DIR } from './skill.ts'
 import {
   applyFragmentPatch,
   validateFragment,
@@ -37,7 +38,14 @@ const DESCRIPTION =
   + 'exact `old_str`/`new_str` replacement instead of re-sending the whole '
   + 'fragment. The card appears while you generate; a copy of the finished '
   + 'fragment is saved into the session workspace. Load the `visualize` skill '
-  + 'for the authoring contract before your first call.'
+  + 'for the authoring contract before your first call. '
+  // Agents without a skill tool (the minimal preset exposes only a shell)
+  // still see this tool; left with an unloadable skill name they go looking
+  // through the user's home for anything called "visualize". Naming the file
+  // gives them the same contract and ends the search.
+  + `If this session has no skill tool, read the same contract from ${SKILL_BODY_PATH} `
+  + `(its relative paths resolve against ${SKILL_RESOURCE_DIR}) with a file or shell tool; `
+  + 'do not search for it anywhere else.'
 
 /**
  * Build the `visualize` tool definition over the composed filesystem seam.

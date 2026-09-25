@@ -176,3 +176,19 @@ describe('visualizeTool sandbox policy', () => {
     expect(calls.writePolicy).toBeUndefined()
   })
 })
+
+/**
+ * The minimal preset shows this tool beside a bare shell and no skill tool.
+ * The description must hand such an agent a readable contract, or it goes
+ * searching the user's home directories for one.
+ */
+describe('visualizeTool description', () => {
+  it('names an on-disk contract for agents that cannot load skills', async () => {
+    const { existsSync } = await import('node:fs')
+    const tool = visualizeTool({} as Context, 1000)
+    const path = /read the same contract from (\S+\.md)/.exec(tool.description)?.[1]
+    expect(path).toBeDefined()
+    expect(existsSync(path!)).toBe(true)
+    expect(tool.description).toContain('do not search for it anywhere else')
+  })
+})
