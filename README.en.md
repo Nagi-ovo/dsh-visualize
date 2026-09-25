@@ -29,11 +29,15 @@ dsh plugin --profile web add @nagi-ovo/dsh-visualize
 
 GitHub also works: `dsh plugin --profile web add github:Nagi-ovo/dsh-visualize`. Run `dsh --profile web --dump-config` to confirm that the plugin is present in the final configuration. For local development, clone the repository and run `dsh plugin --profile web add .` from its root; committed build output means no separate build step is required. Users of the community [plugin-registry](https://github.com/dsh-external/plugin-registry) can also install it from Settings → Plugins.
 
+Compatible with DSH 0.1.1-rc.2 through 0.1.7-rc.2.
+
 ## Use it
 
 Tell the model what you want to explore, for example, “make an adjustable visualization of a sorting algorithm.” The model writes an HTML fragment, then calls `visualize(path, title?, mode?)` to place it in the conversation. Side-by-side comparisons can use `mode: "wide"`.
 
 Cards follow the DSH light or dark theme and whale-blue palette. Session replay restores them from the persistent tool result, so the original fragment file does not need to remain on disk.
+
+By default DSH folds a finished turn's tool process. While it does, the turn's cards also appear under the final answer, so you see them without opening the process; with Work details set to Verbose they stay in place only.
 
 ## Security
 

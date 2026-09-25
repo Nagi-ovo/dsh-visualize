@@ -29,11 +29,15 @@ dsh plugin --profile web add @nagi-ovo/dsh-visualize
 
 也可以从 GitHub 安装：`dsh plugin --profile web add github:Nagi-ovo/dsh-visualize`。可以运行 `dsh --profile web --dump-config` 确认插件已经进入最终配置。需要修改源码时，克隆仓库并在仓库目录运行 `dsh plugin --profile web add .`；构建产物已经提交，不需要额外构建。使用社区 [plugin-registry](https://github.com/dsh-external/plugin-registry) 的用户也可以从「设置 → 插件」安装。
 
+兼容 DSH 0.1.1-rc.2 到 0.1.7-rc.2。
+
 ## 怎么用
 
 直接告诉模型你想看什么，例如「做一个能调参数的排序算法可视化」。模型会写出一份 HTML fragment，再调用 `visualize(path, title?, mode?)` 把它放进对话。适合并排比较的内容可以使用 `mode: "wide"`。
 
 卡片会跟随 DSH 的明暗主题和鲸鱼蓝配色。会话重放时，页面从持久化的工具结果恢复，不依赖原始 fragment 文件仍然存在。
+
+DSH 默认会把已完成回合的工具过程折叠起来。折叠时，这一轮画出的卡片会再显示在最终回答下方，不用展开过程也能看到；「工作步骤展示」选「完全展开」时则只在原位显示。
 
 ## 安全
 
