@@ -57,7 +57,7 @@ function firstResultLine(content: readonly { type: string; text?: string }[]): s
 }
 
 /** The settled, well-formed card: header line plus the sandboxed frame. */
-function Frame({ meta, callId }: { meta: VisualizeMeta; callId: string }) {
+export function Frame({ meta, callId }: { meta: VisualizeMeta; callId: string }) {
   // Bumped by the observers below; each bump re-resolves the bridged palette.
   const [themeTick, setThemeTick] = useState(0)
   const [height, setHeight] = useState(MIN_HEIGHT)
@@ -128,7 +128,8 @@ function Frame({ meta, callId }: { meta: VisualizeMeta; callId: string }) {
  * the frame.
  */
 export function VisualizeCard({ callId, block }: ToolCallViewProps) {
-  const argsRaw = 'kind' in block ? block.call?.argsRaw : block.argsRaw
+  // dsh 0.1.7 adds a preparing phase whose block carries no arguments yet.
+  const argsRaw = 'kind' in block ? block.call?.argsRaw : 'argsRaw' in block ? block.argsRaw : undefined
   if (!('kind' in block)) {
     const live = visualizeMetaFromArgs(argsRaw)
     if (live !== undefined) return <Frame meta={live} callId={callId} />

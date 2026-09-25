@@ -15,5 +15,5 @@
     "noEmit": true
   },
   "include": ["src", "tests"],
-  "exclude": ["src/client", "tests/client.spec.ts"]
+  "exclude": ["src/client", "tests/client.spec.ts", "tests/turn-cards.spec.tsx"]
 }
