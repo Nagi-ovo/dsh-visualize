@@ -37,6 +37,25 @@ const headerStyle: CSSProperties = {
   whiteSpace: 'nowrap',
 }
 
+/**
+ * The card never widens its column: `minWidth: 0` lets the card shrink as a
+ * flex or grid item (whose automatic minimum is its min-content width, here
+ * the whole no-wrap header), so a long path truncates instead of stretching
+ * the frame past the transcript.
+ */
+const cardStyle: CSSProperties = { minWidth: 0, maxWidth: '100%' }
+
+/** Title keeps its width until it alone fills the row; the path yields first. */
+const titleStyle: CSSProperties = {
+  fontWeight: 500,
+  flexShrink: 0,
+  maxWidth: '100%',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+}
+
+const pathStyle: CSSProperties = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }
+
 const frameStyle: CSSProperties = {
   display: 'block',
   width: '100%',
@@ -103,12 +122,10 @@ export function Frame({ meta, callId }: { meta: VisualizeMeta; callId: string })
   }, [meta, callId, themeTick])
 
   return (
-    <div>
+    <div style={cardStyle}>
       <div style={headerStyle} title={meta.path === '' ? meta.title : meta.path}>
-        <span style={{ fontWeight: 500 }}>{meta.title}</span>
-        {meta.path !== '' && (
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta.path}</span>
-        )}
+        <span style={titleStyle}>{meta.title}</span>
+        {meta.path !== '' && <span style={pathStyle}>{meta.path}</span>}
       </div>
       <iframe
         sandbox="allow-scripts"

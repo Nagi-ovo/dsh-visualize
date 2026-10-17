@@ -137,7 +137,14 @@ export function selectTurnCards(owner: { turn?: TurnLocation; seq: number }): re
 /** Folding observable injected by the registration. */
 export type TurnCardsInjected = InjectFace<{ readonly hooks: { readonly visualizeFolds: HostObservable<boolean> } }>
 
-const listStyle: CSSProperties = { display: 'grid', gap: 12, margin: '8px 0 4px' }
+/** A grid track sized `minmax(0, 1fr)`: an `auto` track would grow to a card's min-content. */
+const listStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr)',
+  gap: 12,
+  margin: '8px 0 4px',
+  minWidth: 0,
+}
 
 /**
  * Turn-tail entry. A list turn tail mounts it on every turn, so it declines
