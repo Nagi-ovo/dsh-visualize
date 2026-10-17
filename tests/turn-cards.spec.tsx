@@ -17,6 +17,7 @@ import { configFormsFolds, foldingSource, settingsScopeFolds } from '../src/clie
 import {
   cardsBefore, foldCard, selectTurnCards, TURN_CARDS_KEY, turnCardsDefinition, TurnCards, type TurnCard,
 } from '../src/client/TurnCards.tsx'
+import { STREAM_KEY } from '../src/client/StreamingPreview.tsx'
 import type { VisualizeMeta } from '../src/fragment.ts'
 
 /** A well-formed persisted descriptor. */
@@ -162,23 +163,31 @@ describe('client registration', () => {
     }
     const events = { register: (def: { kind: string }) => { definitions.push(def.kind); return () => undefined } }
     const all: Record<string, unknown> = { uiConversation: { events }, ...services }
-    apply({ slots, get: (name: string) => all[name] } as never)
+    const host = {
+      slots,
+      get: (name: string) => all[name],
+      inject(deps: readonly string[], callback: (scope: unknown) => void) {
+        if (deps.every(dep => all[dep] !== undefined)) callback(host)
+      },
+    }
+    apply(host as never)
     return { registered, definitions }
   }
 
-  it('registers the turn cards with both slot shapes when the registry exists', () => {
+  it('registers the stream and turn cards, the latter with both slot shapes, when the registry exists', () => {
     const { registered, definitions } = boot({})
-    expect(definitions).toEqual([TURN_CARDS_KEY])
+    expect(definitions).toEqual([STREAM_KEY, TURN_CARDS_KEY])
     const tail = registered.get('conversation.chat.turnTail')
     expect(tail?.options.id).toBe('dsh-visualize-cards')
     expect(tail?.options.select).toBe(selectTurnCards)
   })
 
-  it('skips the turn cards on a host without the Conversation registry', () => {
+  it('skips the Definitions and turn cards on a host without the Conversation registry', () => {
     const { registered, definitions } = boot({ uiConversation: undefined })
     expect(definitions).toEqual([])
     expect(registered.has('conversation.chat.turnTail')).toBe(false)
     expect(registered.has('tool.call.toolview')).toBe(true)
+    expect(registered.has('conversation.input.dock')).toBe(true)
   })
 })
 

@@ -15,7 +15,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { VisualizeCard } from './VisualizeCard.tsx'
-import { StreamingPreview } from './StreamingPreview.tsx'
+import { StreamingPreview, streamDefinition } from './StreamingPreview.tsx'
 import { foldingSource, type FoldingHost } from './folding.ts'
 import { selectTurnCards, turnCardsDefinition, TurnCards } from './TurnCards.tsx'
 
@@ -61,9 +61,10 @@ function turnTailOptions(host: FoldingHost) {
 }
 
 /**
- * Register the keyed toolview and the dock preview. Waiting on each hole's
- * declaration mirrors the official registrants: entry application order is
- * loader-driven, and a direct register racing the declaration fails boot.
+ * Register the keyed toolview, the dock preview with its stream Definition,
+ * and the turn-tail cards. Waiting on each hole's declaration mirrors the
+ * official registrants: entry application order is loader-driven, and a
+ * direct register racing the declaration fails boot.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
@@ -71,6 +72,13 @@ export function apply(ctx: ClientContext): void {
     { name: 'tool.call.toolview', key: 'visualize' },
     VisualizeCard,
   ))
+  // The dock reads the argument stream from Turn data the stream Definition
+  // folds; without the registry (dsh 0.1.1) it reads the session partial. The
+  // dock is declared while the Conversation service is still being built, so
+  // the Definition waits on the service itself and lives with that fiber.
+  ctx.inject(['uiConversation'], (scope: ClientContext) => {
+    conversationEvents(scope)?.register(streamDefinition as ConversationNodeDefinition)
+  })
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register(
     { name: 'conversation.input.dock', id: 'visualize-stream', order: 30 },
     StreamingPreview,
