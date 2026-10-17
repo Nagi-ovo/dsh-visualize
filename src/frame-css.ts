@@ -27,11 +27,11 @@ export const FRAME_CSS = `
   --primary: var(--dsh-viz-primary, light-dark(rgb(65 118 230), rgb(110 150 240)));
   --primary-foreground: var(--dsh-viz-primary-foreground, light-dark(rgb(255 255 255), rgb(13 13 13)));
   --viz-series-1: var(--dsh-viz-primary, light-dark(rgb(65 118 230), rgb(110 150 240)));
-  --viz-series-2: light-dark(rgb(226 116 26), rgb(245 152 66));
-  --viz-series-3: light-dark(rgb(16 148 82), rgb(72 196 130));
-  --viz-series-4: light-dark(rgb(146 94 220), rgb(176 132 240));
-  --viz-series-5: light-dark(rgb(212 66 84), rgb(240 110 126));
-  --viz-series-6: light-dark(rgb(160 138 22), rgb(206 182 70));
+  --viz-series-2: light-dark(rgb(225 105 16), rgb(236 142 59));
+  --viz-series-3: light-dark(rgb(2 155 100), rgb(72 196 130));
+  --viz-series-4: light-dark(rgb(147 89 185), rgb(183 145 226));
+  --viz-series-5: light-dark(rgb(214 63 76), rgb(233 108 122));
+  --viz-series-6: light-dark(rgb(154 139 45), rgb(206 182 70));
   --radius: 8px;
   --font-size-base: 14px;
 }
