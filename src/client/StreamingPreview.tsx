@@ -65,27 +65,70 @@ interface StreamState {
   readonly calls: readonly StreamedCall[]
 }
 
-/** The slice of a stream chunk this Definition reads (dsh-llm `StreamChunk`). */
-type ChunkSlice =
-  | { readonly type: 'tool-call-delta'; readonly index: number; readonly id: unknown; readonly name?: string; readonly argumentsDelta: string }
-  | { readonly type: 'block-end'; readonly index: number; readonly block: { readonly type: string; readonly id?: unknown; readonly name?: string; readonly arguments?: unknown } }
-  | { readonly type: string }
-
-/** The slices of the events this Definition reads. */
-interface LiveChunkData {
-  readonly turn: number
+/** One argument chunk, already checked: `final` marks a settled block's full text. */
+interface CallChunk {
   readonly step: number
-  readonly chunk: ChunkSlice
+  readonly index: number
+  readonly id: string
+  readonly name: string | undefined
+  readonly text: string
+  readonly final: boolean
+}
+
+/** What one accepted event means to the fold. */
+type StreamInput =
+  | { readonly kind: 'turn'; readonly turn: number }
+  | { readonly kind: 'chunk'; readonly turn: number; readonly chunk: CallChunk }
+  | { readonly kind: 'call'; readonly turn: number; readonly callId: string }
+
+const isIndex = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+const idOf = (value: unknown): string => typeof value === 'string' || typeof value === 'number' ? String(value) : ''
+
+/**
+ * Read an argument chunk (dsh-llm `StreamChunk`): a `tool-call-delta`, or the
+ * `block-end` of a tool-call block.
+ * @param chunk - the live chunk, unchecked.
+ * @param step - the chunk's step.
+ * @returns the checked chunk, or undefined for anything else or malformed.
+ */
+function callChunk(chunk: unknown, step: number): CallChunk | undefined {
+  if (!isRecord(chunk) || !isIndex(chunk.index)) return undefined
+  if (chunk.type === 'tool-call-delta') {
+    return {
+      step, index: chunk.index, id: idOf(chunk.id),
+      name: typeof chunk.name === 'string' ? chunk.name : undefined,
+      text: typeof chunk.argumentsDelta === 'string' ? chunk.argumentsDelta : '',
+      final: false,
+    }
+  }
+  const block = chunk.block
+  if (chunk.type !== 'block-end' || !isRecord(block) || block.type !== 'tool-call') return undefined
+  if (typeof block.arguments !== 'string') return undefined
+  return {
+    step, index: chunk.index, id: idOf(block.id),
+    name: typeof block.name === 'string' ? block.name : undefined,
+    text: block.arguments,
+    final: true,
+  }
 }
 
 /**
- * Whether a live chunk carries tool-call argument text.
- * @param chunk - stream chunk.
- * @returns true for argument deltas and settled tool-call blocks.
+ * Classify an event without trusting its payload: a history window can begin
+ * anywhere and a host may change shapes, and a throw here would abort the
+ * host's whole conversation assembly, not just this preview.
+ * @param event - any Session event the engine offers.
+ * @returns the fold input, or undefined when unrelated or malformed.
  */
-function isCallChunk(chunk: ChunkSlice): boolean {
-  return chunk.type === 'tool-call-delta'
-    || (chunk.type === 'block-end' && (chunk as Extract<ChunkSlice, { type: 'block-end' }>).block.type === 'tool-call')
+function streamInput(event: { readonly type: string; readonly data?: unknown }): StreamInput | undefined {
+  const data = event.data
+  if (!isRecord(data) || !isIndex(data.turn)) return undefined
+  const turn = data.turn
+  if (event.type === 'turn/start') return { kind: 'turn', turn }
+  if (event.type === 'tool/call') return { kind: 'call', turn, callId: idOf(data.callId) }
+  if (event.type !== 'assistant/live-chunk' || !isIndex(data.step)) return undefined
+  const chunk = callChunk(data.chunk, data.step)
+  return chunk === undefined ? undefined : { kind: 'chunk', turn, chunk }
 }
 
 /**
@@ -94,35 +137,34 @@ function isCallChunk(chunk: ChunkSlice): boolean {
  * stream addresses it; a settled block replaces the accumulated text with
  * the authoritative arguments.
  * @param calls - calls so far.
- * @param data - the live chunk payload.
+ * @param chunk - the checked chunk.
  * @returns the next call list.
  */
-export function foldChunk(calls: readonly StreamedCall[], data: LiveChunkData): readonly StreamedCall[] {
-  const chunk = data.chunk
-  if (!('index' in chunk)) return calls
-  const slot = `${data.step}:${chunk.index}`
+function foldChunk(calls: readonly StreamedCall[], chunk: CallChunk): readonly StreamedCall[] {
+  const slot = `${chunk.step}:${chunk.index}`
   const at = calls.findIndex(call => call.slot === slot)
   const previous = at === -1 ? undefined : calls[at]
-  let next: StreamedCall
-  if (chunk.type === 'tool-call-delta') {
-    const delta = chunk as Extract<ChunkSlice, { type: 'tool-call-delta' }>
-    const id = String(delta.id ?? '')
-    next = {
-      slot,
-      callId: previous?.callId || id,
-      name: delta.name ?? previous?.name ?? '',
-      argsRaw: (previous?.argsRaw ?? '') + delta.argumentsDelta,
-    }
-  } else {
-    const block = (chunk as Extract<ChunkSlice, { type: 'block-end' }>).block
-    next = {
-      slot,
-      callId: previous?.callId || String(block.id ?? ''),
-      name: block.name ?? previous?.name ?? '',
-      argsRaw: typeof block.arguments === 'string' ? block.arguments : previous?.argsRaw ?? '',
-    }
+  const next: StreamedCall = {
+    slot,
+    callId: previous?.callId || chunk.id,
+    name: chunk.name ?? previous?.name ?? '',
+    argsRaw: chunk.final ? chunk.text : (previous?.argsRaw ?? '') + chunk.text,
   }
   return at === -1 ? [...calls, next] : calls.map((call, index) => index === at ? next : call)
+}
+
+/**
+ * Apply one event. Total: unrelated or malformed input returns the state.
+ * @param state - state so far.
+ * @param event - the matched event.
+ * @returns the next state.
+ */
+function reduceStream(state: StreamState, event: { readonly type: string; readonly data?: unknown }): StreamState {
+  const input = streamInput(event)
+  if (input?.kind === 'chunk') return { ...state, calls: foldChunk(state.calls, input.chunk) }
+  if (input?.kind !== 'call') return state
+  const calls = state.calls.filter(call => call.callId !== input.callId)
+  return calls.length === state.calls.length ? state : { ...state, calls }
 }
 
 /**
@@ -130,39 +172,24 @@ export function foldChunk(calls: readonly StreamedCall[], data: LiveChunkData): 
  * Node. Live chunks are transient: when the Assistant message settles the
  * engine retires them and replays the Context without them, which empties the
  * value on its own; a durable `tool/call` also settles its call.
+ *
+ * Every accepted event is a start candidate. The engine rejects a start that
+ * arrives on a Context already holding matches, and a history window can
+ * begin at any event of a turn (a long turn loses its `turn/start`, keeps a
+ * `tool/call`, and then streams again), so no event may be an update-only
+ * match; the earliest loaded one opens the Context and the rest fold.
  */
 export const streamDefinition: ConversationNodeDefinition<StreamState> = {
   kind: STREAM_KEY,
   match: (event) => {
-    if (event.type === 'turn/start') return { id: String(event.data.turn), role: 'start' }
-    if (event.type === 'assistant/live-chunk') {
-      const data = event.data as unknown as LiveChunkData
-      // Every argument chunk may open the Context: a window loaded mid-turn
-      // can lack the turn's start.
-      return isCallChunk(data.chunk) ? { id: String(data.turn), role: 'start' } : null
-    }
-    if (event.type === 'tool/call') return { id: String(event.data.turn), role: 'update' }
-    return null
+    const input = streamInput(event)
+    return input === undefined ? null : { id: String(input.turn), role: 'start' }
   },
   start: (_context, match) => {
-    const data = match.event.data as unknown as { turn: number }
-    const state: StreamState = { turn: data.turn, calls: [] }
-    if (match.event.type !== 'assistant/live-chunk') return state
-    return { ...state, calls: foldChunk(state.calls, match.event.data as unknown as LiveChunkData) }
+    const input = streamInput(match.event)
+    return reduceStream({ turn: input?.turn ?? 0, calls: [] }, match.event)
   },
-  update: (context, match) => {
-    const event = match.event
-    if (event.type === 'assistant/live-chunk') {
-      const calls = foldChunk(context.state.calls, event.data as unknown as LiveChunkData)
-      return calls === context.state.calls ? context.state : { ...context.state, calls }
-    }
-    if (event.type === 'tool/call') {
-      const callId = String((event.data as unknown as { callId: unknown }).callId)
-      const calls = context.state.calls.filter(call => call.callId !== callId)
-      return calls.length === context.state.calls.length ? context.state : { ...context.state, calls }
-    }
-    return context.state
-  },
+  update: (context, match) => reduceStream(context.state, match.event),
   publication: match => match.event.type === 'assistant/live-chunk' ? 'animation-frame' : 'immediate',
   buildLocationData: (context, scope, previous) => {
     if (scope !== 'turn' || context.state === undefined) return null

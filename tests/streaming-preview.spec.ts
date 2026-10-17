@@ -42,12 +42,13 @@ function publish(events: readonly never[]) {
 }
 
 describe('stream definition', () => {
-  it('claims turn starts, argument chunks, and tool calls only', () => {
+  it('claims turn starts, argument chunks, and tool calls only, each as a start', () => {
     const def = streamDefinition
     expect(def.match(TURN_START)).toEqual({ id: '2', role: 'start' })
     expect(def.match(delta(1, 0, '{'))).toEqual({ id: '2', role: 'start' })
     expect(def.match({ type: 'assistant/live-chunk', seq: 1, data: { turn: 2, step: 1, chunk: { type: 'text-delta', index: 0, text: 'x' } } } as never)).toBeNull()
-    expect(def.match({ type: 'tool/call', seq: 3, data: { turn: 2, callId: 'v' } } as never)).toEqual({ id: '2', role: 'update' })
+    // Start candidates only: a window may open on any of them.
+    expect(def.match({ type: 'tool/call', seq: 3, data: { turn: 2, callId: 'v' } } as never)).toEqual({ id: '2', role: 'start' })
     expect(def.match({ type: 'tool/result', seq: 4, data: { turn: 2 } } as never)).toBeNull()
   })
 
