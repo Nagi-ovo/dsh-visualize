@@ -1,6 +1,7 @@
 <!-- Worked example: sliders driving a Chart.js area curve with summary stats.
      Idioms on display: pinned CDN build, probe-resolved theme colors (canvas
-     cannot read CSS variables), a soft gradient fill under the single
+     cannot read CSS variables), the card's real font family at 12px handed to
+     the canvas once webfonts are ready, a soft gradient fill under the single
      measure, container-driven sizing, the free first-render entrance, and
      chart.update() so control changes transition in place instead of
      replaying the entrance. -->
@@ -64,7 +65,11 @@
   var faint = series.replace('rgb', 'rgba').replace(')', ', 0.25)');
   Chart.defaults.color = themeColor('--muted-foreground');
   Chart.defaults.borderColor = themeColor('--border');
-  Chart.defaults.font.family = 'inherit';
+  // Canvas cannot inherit the CSS font either ('inherit' invalidates the whole
+  // font string and leaves 10px sans-serif): pass the computed family and a
+  // size at or above the 11px floor.
+  Chart.defaults.font.family = getComputedStyle(document.getElementById('sim-cooling')).fontFamily;
+  Chart.defaults.font.size = 12;
 
   function values() {
     var k = Number(rateEl.value) / 100, n = Number(yearsEl.value);
@@ -76,38 +81,42 @@
     return v.toFixed(0) + '°C';
   }
 
+  var chart = null;
   var ctx = document.getElementById('sim-cooling-plot');
   // Gradient fill: the series color fading to transparent under the line.
   var gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 220);
   gradient.addColorStop(0, faint);
   gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
-  var data = values();
-  var chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: data.map(function (_, y) { return y; }),
-      datasets: [{
-        data: data,
-        borderColor: series,
-        backgroundColor: gradient,
-        fill: true,
-        borderWidth: 2,
-        pointRadius: 0,
-        tension: 0.25,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { grid: { display: false }, ticks: { maxTicksLimit: 9 } },
-        y: { ticks: { callback: fmt, maxTicksLimit: 6 } },
+  // values() reads the sliders at draw time, so input before fonts settle is kept.
+  function draw() {
+    var data = values();
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.map(function (_, y) { return y; }),
+        datasets: [{
+          data: data,
+          borderColor: series,
+          backgroundColor: gradient,
+          fill: true,
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.25,
+        }],
       },
-      interaction: { mode: 'index', intersect: false },
-    },
-  })
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 9 } },
+          y: { ticks: { callback: fmt, maxTicksLimit: 6 } },
+        },
+        interaction: { mode: 'index', intersect: false },
+      },
+    });
+  }
 
   function update() {
     var data = values();
@@ -117,6 +126,7 @@
     document.getElementById('sim-cooling-years-out').textContent = yearsEl.value + ' min';
     document.getElementById('sim-cooling-end').textContent = fmt(data[data.length - 1]);
     document.getElementById('sim-cooling-drink').textContent = toDrinkable.toFixed(1) + ' min';
+    if (!chart) return;
     chart.data.labels = data.map(function (_, t) { return t; });
     chart.data.datasets[0].data = data;
     chart.update(); // transitions in place; the entrance never replays
@@ -125,5 +135,7 @@
   rateEl.addEventListener('input', update);
   yearsEl.addEventListener('input', update);
   update();
+  // Draw once fonts settle so tick labels are measured in the final face.
+  document.fonts.ready.then(draw);
 })();
 </script>

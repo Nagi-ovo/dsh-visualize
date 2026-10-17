@@ -23,8 +23,9 @@ Load the pinned build:
 ```
 
 Canvas cannot resolve CSS variables — `'var(--viz-series-1)'` passed to
-Chart.js silently paints nothing. Resolve tokens through a probe element
-first:
+Chart.js silently paints nothing — and it cannot inherit the CSS font either.
+Resolve tokens through a probe element and hand Chart.js the computed font
+family:
 
 ```js
 function themeColor(token) {
@@ -37,9 +38,24 @@ function themeColor(token) {
 }
 Chart.defaults.color = themeColor('--muted-foreground');
 Chart.defaults.borderColor = themeColor('--border');
-Chart.defaults.font.family = 'inherit';
+Chart.defaults.font.family = getComputedStyle(document.getElementById('my-viz')).fontFamily;
+Chart.defaults.font.size = 12;
+
+var chart = null;
+document.fonts.ready.then(function () {
+  chart = new Chart(canvas, config);
+});
 ```
 
+- Never set the font family to `'inherit'` or a CSS variable. Canvas rejects
+  the whole font string and silently falls back to `10px sans-serif`, below
+  the 11px floor and outside the card's typeface. Read the family from your
+  fragment root (`my-viz` above) so a font you set there reaches the chart,
+  and keep tick and label text at 12px; never go below 11px.
+- Create the chart inside `document.fonts.ready.then(...)`. Chart.js measures
+  labels once at first draw, so a webfont that arrives later leaves ticks in
+  the fallback face. Any control handler that touches the chart before then
+  must check that it exists.
 - Size through the container: a wrapping `div` with an explicit height and
   `responsive: true, maintainAspectRatio: false` in the chart options. Never
   fix the canvas width.

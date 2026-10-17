@@ -40,7 +40,8 @@ theme switches live.
 - Accent: `--primary`, `--primary-foreground`.
 - Series palette: `--viz-series-1` … `--viz-series-6`; `--viz-series-1` is
   the single measure / active element.
-- SVG text takes `fill: var(--foreground)` at 11px effective size or larger.
+- SVG text takes `fill: var(--foreground)` at 11px effective size or larger;
+  canvas (Chart.js) text follows the same floor — see `charts.md`.
 
 ## Base classes
 
