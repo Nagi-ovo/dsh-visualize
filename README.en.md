@@ -33,15 +33,17 @@ Compatible with DSH 0.1.1-rc.2 through 0.2.1-rc.2.
 
 ## Use it
 
-Tell the model what you want to explore, for example, “make an adjustable visualization of a sorting algorithm.” The model writes an HTML fragment, then calls `visualize(path, title?, mode?)` to place it in the conversation. Side-by-side comparisons can use `mode: "wide"`.
+Tell the model what you want to explore, for example, “make an adjustable visualization of a sorting algorithm.” The model calls `visualize` with the whole HTML fragment as its `fragment` argument (plus an optional `title` and `mode`), and the card starts rendering while the model is still writing it. Side-by-side comparisons can use `mode: "wide"`. To correct a card it already drew, the model calls `action: "update"` with the card's `path` and one exact `old_str` → `new_str` replacement instead of resending the markup; `path` is only used by `update`.
 
-Cards follow the DSH light or dark theme and whale-blue palette. Session replay restores them from the persistent tool result, so the original fragment file does not need to remain on disk.
+Cards follow the DSH light or dark theme and whale-blue palette. When the chat column is too narrow, the **Open in new window** button at the right of the card header opens the card full-size in its own tab, themed as DSH was when you opened it and still running inside the same sandboxed iframe. Session replay restores cards from the persistent tool result, so the original fragment file does not need to remain on disk.
+
+A copy of each card's fragment is saved to `~/.dsh/visualize/sessions/<session id>/<title>-<hash>.html` (under `$DSH_HOME/visualize/` when `DSH_HOME` is set), one directory per conversation and never inside your project, so `git status` stays free of `viz/`. `update` patches that copy. Cards that older versions wrote under `viz/` in the workspace can still be updated in place. The plugin does not clean these files up; you can delete `~/.dsh/visualize/` at any time and existing conversations still replay their cards.
 
 By default DSH folds a finished turn's tool process. While it does, the turn's cards also appear under the final answer, so you see them without opening the process; with Work details set to Verbose they stay in place only.
 
 ## Security
 
-Each card runs in a sandboxed iframe with an opaque origin and cannot access the host page. Its CSP blocks network requests, nested pages, and form submissions, while allowing static assets from a fixed set of CDNs. Fragments are limited to `1000000` bytes by default; change `maxFragmentBytes` to use a different limit.
+Each card runs in a sandboxed iframe with an opaque origin and cannot access the host page. Opening a card in a new window keeps that: the new tab carries no model code of its own, and the fragment still runs only inside an iframe with the same sandbox and CSP, so it cannot read DSH's cookies, localStorage, or login token. Its CSP blocks network requests, nested pages, and form submissions, while allowing static assets from a fixed set of CDNs. Fragments are limited to `1000000` bytes by default; change `maxFragmentBytes` to use a different limit.
 
 ## Limitations
 

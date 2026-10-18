@@ -14,12 +14,17 @@
  * Height: a sandboxed frame's document is unreachable from the parent, so the
  * frame posts its scroll height (tagged with this call's id) and the card
  * sizes the iframe, capped per mode with internal scrolling past the cap.
+ *
+ * Open in new window: the header's icon button reopens the same frame
+ * document full-size in its own tab, wrapped in a script-free page whose only
+ * content is the identically sandboxed iframe (see window-doc.ts).
  */
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import { visualizeMetaFrom, visualizeMetaFromArgs, type VisualizeMeta } from '../fragment.ts'
 import { buildFrameDoc, HEIGHT_MESSAGE_TYPE } from '../shell.ts'
+import { buildWindowDoc, FRAME_SANDBOX } from '../window-doc.ts'
 import { resolveTheme } from './theme.ts'
 
 /** Iframe height bounds; content beyond the cap scrolls inside the frame. */
@@ -55,6 +60,67 @@ const titleStyle: CSSProperties = {
 }
 
 const pathStyle: CSSProperties = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }
+
+/** Icon button at the header's end; it never yields width to the path. */
+const openStyle: CSSProperties = {
+  alignSelf: 'center',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+  marginLeft: 'auto',
+  width: 22,
+  height: 22,
+  padding: 0,
+  border: 0,
+  borderRadius: 4,
+  background: 'transparent',
+  color: 'inherit',
+  cursor: 'pointer',
+  // The header clips its overflow; keep the focus ring inside the button.
+  outlineOffset: -2,
+}
+
+/**
+ * Open the card full-size in its own tab. The tab is a script-free Blob page
+ * holding the same sandboxed frame (see window-doc.ts), themed as the host is
+ * right now. Synchronous end to end so the browser treats it as a user-opened
+ * tab rather than a blocked popup. The URL is not revoked: the tab can then be
+ * reloaded, and the browser frees it when the chat page unloads.
+ * @param meta - the card to open.
+ * @param callId - correlation token base for the frame's height reports.
+ */
+function openInWindow(meta: VisualizeMeta, callId: string): void {
+  const { themeVars, colorScheme } = resolveTheme()
+  const frameDoc = buildFrameDoc({
+    fragment: meta.fragment,
+    title: meta.title,
+    themeVars,
+    colorScheme,
+    // Distinct from the in-chat token, so these reports never size a card.
+    reportToken: `window:${callId}`,
+  })
+  const page = buildWindowDoc({ frameDoc, title: meta.title, colorScheme, background: themeVars.card ?? '' })
+  const url = URL.createObjectURL(new Blob([page], { type: 'text/html' }))
+  window.open(url, '_blank', 'noopener')
+}
+
+/** Accessible name of the open control, in the host's language. */
+function openLabel(): string {
+  return document.documentElement.lang.toLowerCase().startsWith('zh') ? '在新窗口打开' : 'Open in new window'
+}
+
+/** Arrow-out-of-box glyph, sized to the 12px header text. */
+function OpenIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9.5 2.5h4v4" />
+      <path d="M13.5 2.5 7.5 8.5" />
+      <path d="M12 9.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3" />
+    </svg>
+  )
+}
 
 const frameStyle: CSSProperties = {
   display: 'block',
@@ -120,15 +186,25 @@ export function Frame({ meta, callId }: { meta: VisualizeMeta; callId: string })
     })
     // themeTick is the deliberate re-resolution trigger for the palette read.
   }, [meta, callId, themeTick])
+  const label = openLabel()
 
   return (
     <div style={cardStyle}>
       <div style={headerStyle} title={meta.path === '' ? meta.title : meta.path}>
         <span style={titleStyle}>{meta.title}</span>
         {meta.path !== '' && <span style={pathStyle}>{meta.path}</span>}
+        <button
+          type="button"
+          style={openStyle}
+          aria-label={label}
+          title={label}
+          onClick={() => openInWindow(meta, callId)}
+        >
+          <OpenIcon />
+        </button>
       </div>
       <iframe
-        sandbox="allow-scripts"
+        sandbox={FRAME_SANDBOX}
         referrerPolicy="no-referrer"
         title={meta.title}
         srcDoc={doc}
