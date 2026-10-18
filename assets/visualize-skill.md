@@ -34,8 +34,9 @@ first chart, read `references/charts.md`; before styling anything, read
 
 Pass the markup directly as the `fragment` argument, with an optional `title`
 and optional `mode`. The card starts rendering while you are still generating,
-and a copy of the finished fragment lands in the session workspace under
-`viz/`.
+and a copy of the finished fragment is saved outside the user's project, in
+this conversation's own card store; the result names its `path`. Never write
+the fragment into the workspace yourself.
 
 Reserve `mode: "wide"` for layouts where several compact panels must sit
 beside each other to be compared; a single dense chart or a full-page mockup
@@ -55,7 +56,9 @@ drawing it again and invites unrequested redesign, so patch it instead:
   and appear exactly once. Keep it as short as stays unique; an empty
   `new_str` deletes the matched region.
 - A card keeps one `path` for its whole life; patches rewrite that file, so
-  several patches in one reply each build on the one before.
+  several patches in one reply each build on the one before. Pass the `path`
+  exactly as the tool reported it — it may sit outside the workspace, so do
+  not read or edit it with file tools.
 - A refused patch tells you what the card actually contains at the site you
   aimed at. Correct `old_str` from that and retry in the same reply rather
   than re-rendering blind.

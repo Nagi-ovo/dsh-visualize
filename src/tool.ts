@@ -5,7 +5,7 @@
  * and replay reproduces the same card byte for byte. Passing the markup as an
  * argument (rather than a file path) lets the browser half live-render the
  * argument stream while the model is still generating; the settled fragment
- * is also written to the session workspace as an exportable artifact, and the
+ * is also kept in a per-session card store outside the project, and the
  * model-facing result stays a one-line confirmation.
  *
  * @module @nagi-ovo/dsh-visualize/tool
@@ -13,10 +13,9 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
-// FsTarget is a value-free type; the import also pulls the `ctx.fs` Context merge.
-import type { FsTarget } from '@deepseek-ai/dsh-fs'
-// Type-only: pulls the `ctx.get('sandboxPolicy')` Context merge.
-import type {} from '@deepseek-ai/dsh-sandbox-policy'
+// Type-only: pulls the `ctx.fs` Context merge.
+import type {} from '@deepseek-ai/dsh-fs'
+import { cardStore, type CardFile } from './storage.ts'
 import { SKILL_BODY_PATH, SKILL_RESOURCE_DIR } from './skill.ts'
 import {
   applyFragmentPatch,
@@ -37,7 +36,7 @@ const DESCRIPTION =
   + 'correct a card you already rendered, call `update` with its `path` and one '
   + 'exact `old_str`/`new_str` replacement instead of re-sending the whole '
   + 'fragment. The card appears while you generate; a copy of the finished '
-  + 'fragment is saved into the session workspace. Load the `visualize` skill '
+  + 'fragment is saved outside the project, per session. Load the `visualize` skill '
   + 'for the authoring contract before your first call. '
   // Agents without a skill tool (the minimal preset exposes only a shell)
   // still see this tool; left with an unloadable skill name they go looking
@@ -49,7 +48,7 @@ const DESCRIPTION =
 
 /**
  * Build the `visualize` tool definition over the composed filesystem seam.
- * @param ctx - registrant context carrying `ctx.fs` for the workspace copy.
+ * @param ctx - registrant context carrying `ctx.fs` and the host home path for the card copy.
  * @param maxFragmentBytes - deployment size ceiling for one fragment.
  * @returns the tool definition to register on `ctx.tools`.
  */
@@ -83,7 +82,7 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
       },
       path: {
         type: 'string',
-        description: 'update only, required: workspace path of the card to patch, as its own call reported it.',
+        description: 'update only, required: path of the card to patch, exactly as its own call reported it.',
       },
       old_str: {
         type: 'string',
@@ -117,7 +116,7 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
         type: 'text',
         text: value.action === 'update'
           ? `Patched "${value.title}" in place (${value.sizeBytes} bytes; updated card at ${value.path}). The user sees the corrected visualization in the conversation; patch that path for any further correction.`
-          : `Rendered "${value.title}" inline (${value.sizeBytes} bytes; workspace copy at ${value.path}). The user sees the interactive visualization in the conversation.`,
+          : `Rendered "${value.title}" inline (${value.sizeBytes} bytes; saved copy at ${value.path}). The user sees the interactive visualization in the conversation.`,
       }],
       // Project the fragment into persisted meta so the card survives replay:
       // the canonical value is not on the wire, only content + meta are.
@@ -129,35 +128,30 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
         path: value.path,
       }),
     },
-    // A create writes only a content-addressed file under viz/; concurrent
+    // A create writes only a content-addressed card file; concurrent
     // siblings target distinct names or identical bytes, so they cannot
     // conflict. An update reads a card before rewriting it, so parallel
     // updates would each patch a base the other has already superseded.
     isConcurrencySafe: args => (args.action ?? 'create') === 'create',
     async execute(args, exec) {
       const action = (args.action ?? 'create') as VisualizeAction
-      // Session-level sandbox policy, as the official fs tools resolve it: the
-      // calling session's cwd becomes the workspace root. Without this, a
-      // confining backend falls back to its process-level default root and
-      // denies the write whenever the session cwd lies elsewhere.
-      const sandboxPolicy = ctx.get('sandboxPolicy')?.resolve({
-        ...exec.agent ? { session: exec.agent.session } : {},
-      })
-      const cwd = sandboxPolicy?.workspaceRoot ?? exec.agent?.session.header.cwd
-      const resolveOpts = { ...cwd !== undefined ? { cwd } : {}, signal: exec.signal }
-      // An update patches the workspace copy, the one card state both halves
+      // Cards live in a per-session store under the harness home, outside the
+      // user's project (see storage.ts); legacy `viz/` workspace copies from
+      // earlier sessions stay patchable through the sandboxed fs seam.
+      const store = cardStore(ctx, exec)
+      // An update patches the stored copy, the one card state both halves
       // agree on: persisted meta is not readable from here, and the model's
       // own transcript may hold a fragment an earlier patch already replaced.
       // It rewrites that same file rather than deriving a new name, so a
       // second patch in the same reply builds on the first — a fresh path per
       // patch would leave later patches addressing a base already superseded,
       // and each would silently drop every edit but its own.
-      let source: FsTarget | undefined
+      let source: CardFile | undefined
       let fragment: string
       if (action === 'update') {
-        source = await ctx.fs.resolve(required(args.path, 'path', action), resolveOpts)
+        source = await store.open(required(args.path, 'path', action))
         fragment = applyFragmentPatch(
-          await ctx.fs.readText(source, exec.signal),
+          await source.read(),
           required(args.old_str, 'old_str', action),
           present(args.new_str, 'new_str', action),
         )
@@ -168,11 +162,10 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
       // A patched card keeps its identity only if the caller restates it, so
       // the title is required on update rather than silently re-defaulted.
       const title = action === 'update' ? required(args.title, 'title', action).trim() : args.title?.trim() || 'Visualization'
-      // A create takes a content-addressed name — <slug>-<hash>.html under
-      // viz/, resolved against the calling agent's session workspace like the
-      // official fs tools do — so re-rendering identical bytes reuses its name.
-      const target = source ?? await ctx.fs.resolve(`viz/${slugOf(title)}-${contentHash(fragment)}.html`, resolveOpts)
-      await ctx.fs.writeText(target, fragment, undefined, exec.signal, sandboxPolicy)
+      // A create takes a content-addressed name — <slug>-<hash>.html — so
+      // re-rendering identical bytes reuses its name.
+      const target = source ?? await store.create(`${slugOf(title)}-${contentHash(fragment)}.html`)
+      await target.write(fragment)
       return {
         action,
         path: target.displayPath,
@@ -247,7 +240,7 @@ function slugOf(title: string): string {
 }
 
 /**
- * Stable 8-hex-digit content hash (FNV-1a) naming the workspace copy.
+ * Stable 8-hex-digit content hash (FNV-1a) naming the saved copy.
  * @param text - the fragment content.
  * @returns the hash as fixed-width hex.
  */
