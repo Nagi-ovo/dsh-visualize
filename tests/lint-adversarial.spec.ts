@@ -5,8 +5,17 @@ import { FragmentLintGate } from '../src/lint-gate.ts'
 /** The tool's own ceiling: fragments up to this size are scanned. */
 const MAX = 1_000_000
 
-/** Wall-clock budget for one lint of a near-limit input; the host event loop blocks for this long. */
+/**
+ * Wall-clock budget for one lint of a near-limit input on the reference
+ * machine; the host event loop blocks for this long. Slower machines (CI
+ * runners) scale it by how much slower they lint a realistic baseline, so
+ * the test still catches the quadratic blow-ups it exists for (those run
+ * 10-100x over) without flaking on hardware.
+ */
 const BUDGET_MS = 200
+
+/** Median ms to lint {@link calibrationFragment} on the reference machine (Apple M-series, Node 26). */
+const REFERENCE_CALIBRATION_MS = 5
 
 /** `head + unit * k + tail`, with k as large as keeps it just under the size limit (ASCII, so chars are bytes). */
 function fill(head: string, unit: string, tail = ''): string {
@@ -152,20 +161,41 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+/** A realistic ~170 KB fragment whose lint time measures this machine's speed. */
+const calibrationFragment = Array.from({ length: 400 }, (_, i) => CARD.replaceAll('%', String(i))).join('')
+
+/**
+ * The budget scaled to this machine: the reference budget times how much
+ * slower than the reference machine it lints the calibration fragment
+ * (never below the reference budget).
+ */
+function machineBudget(): number {
+  const runs: number[] = []
+  for (let i = 0; i < 7; i++) {
+    const started = performance.now()
+    lintFragment(calibrationFragment, MAX)
+    runs.push(performance.now() - started)
+  }
+  const median = runs.sort((a, b) => a - b)[3]!
+  return BUDGET_MS * Math.max(1, median / REFERENCE_CALIBRATION_MS)
+}
+
+// Warm the JIT so neither the calibration nor the first case is charged for compilation.
+lintFragment(CARD.replaceAll('%', 'w').repeat(50), MAX)
+const budget = machineBudget()
+
 describe('lintFragment on adversarial input', () => {
-  // Warm the JIT so the first case is not charged for compilation.
-  lintFragment(CARD.replaceAll('%', 'w').repeat(50), MAX)
   const timings: [string, number][] = []
 
   for (const [name, fragment] of Object.entries(ADVERSARIAL)) {
-    it(`stays under ${BUDGET_MS} ms and never throws: ${name}`, () => {
+    it(`stays under the machine budget (${BUDGET_MS} ms on the reference machine) and never throws: ${name}`, () => {
       expect(new TextEncoder().encode(fragment).length).toBeLessThanOrEqual(MAX)
       const started = performance.now()
       const report = lintFragment(fragment, MAX)
       const elapsed = performance.now() - started
       timings.push([name, elapsed])
       expect(report.skipped).toBeUndefined()
-      expect(elapsed).toBeLessThan(BUDGET_MS)
+      expect(elapsed).toBeLessThan(budget)
     })
   }
 
@@ -179,7 +209,7 @@ describe('lintFragment on adversarial input', () => {
     const fragment = ADVERSARIAL['many fetch( calls']!
     const started = performance.now()
     expect(() => new FragmentLintGate().check({ fragment, maxBytes: MAX, sessionId: 's' })).toThrow(/VZ007/u)
-    expect(performance.now() - started).toBeLessThan(2 * BUDGET_MS)
+    expect(performance.now() - started).toBeLessThan(2 * budget)
   })
 })
 
@@ -193,7 +223,7 @@ describe('lintFragment never throws', () => {
   it('keeps the regex-literal scan linear (Codex repro: 64000 /[ in 128 KB)', () => {
     const started = performance.now()
     lintFragment(`<script>${'/['.repeat(64_000)}</script>`, MAX)
-    expect(performance.now() - started).toBeLessThan(BUDGET_MS)
+    expect(performance.now() - started).toBeLessThan(budget)
   })
 
   it('tokenises 300k nested template literals without recursion', () => {
