@@ -15,7 +15,8 @@ import { visualizeTool } from './tool.ts'
 import { visualizeSkillProvider } from './skill.ts'
 
 export { VISUALIZE_TOOL_NAME } from './tool.ts'
-export { validateFragment, visualizeMetaFrom, type VisualizeMeta, type VisualizeMode } from './fragment.ts'
+export { visualizeMetaFrom, type VisualizeMeta, type VisualizeMode } from './fragment.ts'
+export { validateFragment } from './lint.ts'
 
 /** Cordis plugin name. */
 export const name = 'dsh-visualize'

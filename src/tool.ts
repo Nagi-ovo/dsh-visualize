@@ -17,9 +17,9 @@ import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-fs'
 import { cardStore, type CardFile } from './storage.ts'
 import { SKILL_BODY_PATH, SKILL_RESOURCE_DIR } from './skill.ts'
+import { FragmentLintGate } from './lint-gate.ts'
 import {
   applyFragmentPatch,
-  validateFragment,
   visualizeMetaFrom,
   VISUALIZE_TOOL_NAME,
   type VisualizeAction,
@@ -53,6 +53,7 @@ const DESCRIPTION =
  * @returns the tool definition to register on `ctx.tools`.
  */
 export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefinition {
+  const lint = new FragmentLintGate()
   return defineTool({
     name: VISUALIZE_TOOL_NAME,
     description: DESCRIPTION,
@@ -106,6 +107,7 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
           mode: { type: 'string', required: true, enum: ['inline', 'wide'] },
           sizeBytes: { type: 'integer', required: true },
           fragment: { type: 'string', required: true },
+          warnings: { type: 'string' },
         },
       },
       // Model-facing text stays a confirmation: the fragment is already in the
@@ -117,7 +119,7 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
         text: value.action === 'update'
           ? `Patched "${value.title}" in place (${value.sizeBytes} bytes; updated card at ${value.path}). The user sees the corrected visualization in the conversation; patch that path for any further correction.`
           : `Rendered "${value.title}" inline (${value.sizeBytes} bytes; saved copy at ${value.path}). The user sees the interactive visualization in the conversation.`,
-      }],
+      }, ...value.warnings ? [{ type: 'text' as const, text: value.warnings }] : []],
       // Project the fragment into persisted meta so the card survives replay:
       // the canonical value is not on the wire, only content + meta are.
       presentationMeta: (_args, value) => ({
@@ -148,17 +150,20 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
       // and each would silently drop every edit but its own.
       let source: CardFile | undefined
       let fragment: string
+      let base: string | undefined
       if (action === 'update') {
         source = await store.open(required(args.path, 'path', action))
+        base = await source.read()
         fragment = applyFragmentPatch(
-          await source.read(),
+          base,
           required(args.old_str, 'old_str', action),
           present(args.new_str, 'new_str', action),
         )
       } else {
         fragment = required(args.fragment, 'fragment', action)
       }
-      const sizeBytes = validateFragment(fragment, maxFragmentBytes)
+      // Coded lint: errors throw (nothing renders or is written), warnings ride on the result.
+      const { sizeBytes, warnings } = lint.check({ fragment, maxBytes: maxFragmentBytes, sessionId: exec.agent?.session.header?.id, base })
       // A patched card keeps its identity only if the caller restates it, so
       // the title is required on update rather than silently re-defaulted.
       const title = action === 'update' ? required(args.title, 'title', action).trim() : args.title?.trim() || 'Visualization'
@@ -173,6 +178,7 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
         mode: (args.mode ?? 'inline') as VisualizeMode,
         sizeBytes,
         fragment,
+        ...warnings ? { warnings } : {},
       }
     },
     presentCall: () => ({

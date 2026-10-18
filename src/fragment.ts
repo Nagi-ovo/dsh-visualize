@@ -7,7 +7,8 @@
  * literal markup without a document skeleton. The card owns the skeleton — it
  * wraps the fragment in a sandboxed iframe document with its own CSP — so a
  * fragment that ships its own `<!doctype>`/`<html>`/`<head>`/`<body>` would
- * nest documents and is rejected loudly instead of rendered broken.
+ * nest documents and is rejected loudly instead of rendered broken (see
+ * `lint.ts` for that rule and the rest of the contract's rule table).
  *
  * @module @nagi-ovo/dsh-visualize/fragment
  */
@@ -40,37 +41,6 @@ export interface VisualizeMeta {
   mode: VisualizeMode
   /** Session-relative or absolute source path, kept for provenance display. */
   path: string
-}
-
-/** Document-skeleton tags a fragment must not contain (case-insensitive). */
-const SKELETON_TAG = /<!doctype\b|<\s*(?:html|head|body)\b/iu
-
-/**
- * Validate one fragment against the inline contract.
- * @param fragment - the file content the model wrote.
- * @param maxBytes - deployment size ceiling for one fragment.
- * @returns the fragment's UTF-8 size in bytes.
- * @throws Error naming the violated rule; the tool surfaces it as `isError`.
- */
-export function validateFragment(fragment: string, maxBytes: number): number {
-  if (fragment.trim().length === 0) {
-    throw new Error('invalid visualization: the fragment file is empty')
-  }
-  const sizeBytes = byteLength(fragment)
-  if (sizeBytes > maxBytes) {
-    throw new Error(
-      `invalid visualization: fragment is ${sizeBytes} bytes, over the ${maxBytes}-byte limit — `
-      + 'shrink the inline data first (fewer rows, coarser buckets, fewer decimals)',
-    )
-  }
-  const skeleton = SKELETON_TAG.exec(fragment)
-  if (skeleton) {
-    throw new Error(
-      `invalid visualization: fragment contains a document-skeleton tag (${JSON.stringify(skeleton[0])}) — `
-      + 'write only the inline body; the host supplies <!doctype>, <html>, <head>, and <body>',
-    )
-  }
-  return sizeBytes
 }
 
 /**
@@ -250,15 +220,6 @@ function descriptorFromFields(
     mode: mode === 'wide' ? 'wide' : 'inline',
     path: typeof path === 'string' ? path : '',
   }
-}
-
-/**
- * UTF-8 byte length without Buffer, so the browser bundle needs no polyfill.
- * @param text - the string to measure.
- * @returns its UTF-8 encoding length in bytes.
- */
-function byteLength(text: string): number {
-  return new TextEncoder().encode(text).length
 }
 
 /** JSON short escapes, keyed by the character after the backslash. */

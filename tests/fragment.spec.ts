@@ -3,10 +3,10 @@ import {
   applyFragmentPatch,
   extractStreamingFragment,
   trimStreamingScripts,
-  validateFragment,
   visualizeMetaFrom,
   visualizeMetaFromArgs,
 } from '../src/fragment.ts'
+import { validateFragment } from '../src/lint.ts'
 
 describe('applyFragmentPatch', () => {
   it('replaces the single matching site and leaves the rest byte-identical', () => {

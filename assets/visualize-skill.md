@@ -68,7 +68,12 @@ drawing it again and invites unrequested redesign, so patch it instead:
 ## Fragment rules
 
 The card wraps your fragment in its own document, stylesheet, theme, and
-Content-Security-Policy. The tool rejects violations loudly.
+Content-Security-Policy. The tool lints every fragment, patched cards
+included, against these rules. Each finding carries a `VZ` code, a
+line:column, and a fix. An error renders nothing: apply the fixes and call
+again. Warnings arrive with the rendered card; patch them if they matter. If
+the result says to stop, tell the user what is blocking the card instead of
+retrying.
 
 - Fragment only — never emit `<!doctype>`, `<html>`, `<head>`, or `<body>`.
 - Emit real markup with actual newlines, not a string-escaped rendition

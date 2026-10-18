@@ -11,7 +11,8 @@ import { Context } from "@deepseek-ai/cordis";
  * literal markup without a document skeleton. The card owns the skeleton — it
  * wraps the fragment in a sandboxed iframe document with its own CSP — so a
  * fragment that ships its own `<!doctype>`/`<html>`/`<head>`/`<body>` would
- * nest documents and is rejected loudly instead of rendered broken.
+ * nest documents and is rejected loudly instead of rendered broken (see
+ * `lint.ts` for that rule and the rest of the contract's rule table).
  *
  * @module @nagi-ovo/dsh-visualize/fragment
  */
@@ -37,14 +38,6 @@ interface VisualizeMeta {
   path: string;
 }
 /**
- * Validate one fragment against the inline contract.
- * @param fragment - the file content the model wrote.
- * @param maxBytes - deployment size ceiling for one fragment.
- * @returns the fragment's UTF-8 size in bytes.
- * @throws Error naming the violated rule; the tool surfaces it as `isError`.
- */
-declare function validateFragment(fragment: string, maxBytes: number): number;
-/**
  * Narrow one persisted `tool/result` meta value to a {@link VisualizeMeta}.
  * Wire data cannot be trusted to match the compiled shape (an older or newer
  * host may have logged it), so a mismatch declines to `undefined` — the caller
@@ -53,6 +46,16 @@ declare function validateFragment(fragment: string, maxBytes: number): number;
  * @returns the narrowed descriptor, or `undefined` for the generic path.
  */
 declare function visualizeMetaFrom(meta: unknown): VisualizeMeta | undefined;
+//#endregion
+//#region src/lint.d.ts
+/**
+ * Validate one fragment against the inline contract.
+ * @param fragment - the markup the model sent.
+ * @param maxBytes - deployment size ceiling for one fragment.
+ * @returns the fragment's UTF-8 size in bytes.
+ * @throws Error listing every `error` finding; the tool surfaces it as `isError`.
+ */
+declare function validateFragment(fragment: string, maxBytes: number): number;
 //#endregion
 //#region src/index.d.ts
 /** Cordis plugin name. */
