@@ -32,8 +32,8 @@ const RESOURCE_BASE = {
 const INVOCATION = { modelInvocable: true, userInvocable: true } as const
 const DESCRIPTION =
   'Authoring contract for the visualize tool, which renders interactive cards '
-  + 'in the conversation: simulations, algorithm walkthroughs, charts, '
-  + 'comparisons, and product-screen mockups. Load before the first visualize '
+  + 'in the conversation, or full pages in their own tab: simulations, algorithm '
+  + 'walkthroughs, charts, comparisons, dashboards, and product-screen mockups. Load before the first visualize '
   + 'call in a session — it defines the fragment structure, theming variables, '
   + 'size ceiling, and allowed resources the tool validates against.'
 

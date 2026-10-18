@@ -14,7 +14,7 @@
  * @module @nagi-ovo/dsh-visualize/window-doc
  */
 
-import { sanitizeCssValue } from './shell.ts'
+import { sanitizeCssValue, type FrameVariant } from './shell.ts'
 
 /** Sandbox flags shared by the in-chat card and the windowed page. */
 export const FRAME_SANDBOX = 'allow-scripts'
@@ -29,6 +29,11 @@ export interface WindowDocOptions {
   colorScheme: 'light' | 'dark'
   /** Host surface color at open time (a computed-style value); empty for the scheme default. */
   background: string
+  /**
+   * The frame document's variant. A `page` lays out its own margins, so the
+   * frame fills the tab edge to edge; a `card` keeps a reading inset.
+   */
+  variant?: FrameVariant
 }
 
 /**
@@ -41,6 +46,7 @@ export function buildWindowDoc(options: WindowDocOptions): string {
   const background = surface.length > 0
     ? surface
     : options.colorScheme === 'dark' ? '#1b1b1f' : '#ffffff'
+  const inset = options.variant === 'page' ? '0' : '16px 24px'
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -51,7 +57,7 @@ export function buildWindowDoc(options: WindowDocOptions): string {
 <style>
 :root { color-scheme: ${options.colorScheme}; background: ${background}; }
 html, body { margin: 0; height: 100%; }
-iframe { display: block; box-sizing: border-box; width: 100%; height: 100%; border: 0; padding: 16px 24px; background: transparent; }
+iframe { display: block; box-sizing: border-box; width: 100%; height: 100%; border: 0; padding: ${inset}; background: transparent; }
 </style>
 </head>
 <body><iframe sandbox="${FRAME_SANDBOX}" referrerpolicy="no-referrer" title="${escapeHtml(options.title)}" srcdoc="${escapeHtml(options.frameDoc)}"></iframe></body>

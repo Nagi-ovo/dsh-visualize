@@ -22,8 +22,12 @@ import { Context } from "@deepseek-ai/cordis";
  * the node-side tool implementation into the client bundle.
  */
 declare const VISUALIZE_TOOL_NAME = "visualize";
-/** Width intent of one visualization card. */
-type VisualizeMode = 'inline' | 'wide';
+/**
+ * Surface of one visualization: `inline` and `wide` render the fragment in
+ * the conversation at the chat column's or the expanded width; `page` renders
+ * a launcher card there and the fragment itself as a full page in its own tab.
+ */
+type VisualizeMode = 'inline' | 'wide' | 'page';
 /** The `tool/result` meta descriptor persisted for replay-stable rendering. */
 interface VisualizeMeta {
   /** Discriminant for consumers sharing the meta channel. */
@@ -32,10 +36,12 @@ interface VisualizeMeta {
   fragment: string;
   /** Concise human title shown in the card header. */
   title: string;
-  /** Width intent; `wide` asks the card for the expanded inline surface. */
+  /** Surface; `wide` asks for the expanded inline surface, `page` for a launcher and its own tab. */
   mode: VisualizeMode;
   /** Session-relative or absolute source path, kept for provenance display. */
   path: string;
+  /** One-line description a page launcher shows under its title; absent when none was given. */
+  summary?: string;
 }
 /**
  * Narrow one persisted `tool/result` meta value to a {@link VisualizeMeta}.

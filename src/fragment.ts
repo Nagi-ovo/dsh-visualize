@@ -20,8 +20,24 @@
  */
 export const VISUALIZE_TOOL_NAME = 'visualize'
 
-/** Width intent of one visualization card. */
-export type VisualizeMode = 'inline' | 'wide'
+/**
+ * Surface of one visualization: `inline` and `wide` render the fragment in
+ * the conversation at the chat column's or the expanded width; `page` renders
+ * a launcher card there and the fragment itself as a full page in its own tab.
+ */
+export type VisualizeMode = 'inline' | 'wide' | 'page'
+
+/** Every {@link VisualizeMode}, in the order the tool schema lists them. */
+export const VISUALIZE_MODES: readonly VisualizeMode[] = ['inline', 'wide', 'page']
+
+/**
+ * Narrow one wire value to a {@link VisualizeMode}.
+ * @param value - the raw value.
+ * @returns whether it names a known mode.
+ */
+export function isVisualizeMode(value: unknown): value is VisualizeMode {
+  return value === 'inline' || value === 'wide' || value === 'page'
+}
 
 /**
  * What one `visualize` call does: render a card from whole markup, or patch
@@ -37,10 +53,12 @@ export interface VisualizeMeta {
   fragment: string
   /** Concise human title shown in the card header. */
   title: string
-  /** Width intent; `wide` asks the card for the expanded inline surface. */
+  /** Surface; `wide` asks for the expanded inline surface, `page` for a launcher and its own tab. */
   mode: VisualizeMode
   /** Session-relative or absolute source path, kept for provenance display. */
   path: string
+  /** One-line description a page launcher shows under its title; absent when none was given. */
+  summary?: string
 }
 
 /**
@@ -141,10 +159,20 @@ export function visualizeMetaFrom(meta: unknown): VisualizeMeta | undefined {
   if (typeof meta !== 'object' || meta === null) return undefined
   const record = meta as Record<string, unknown>
   if (record['kind'] !== 'visualize') return undefined
-  const { fragment, title, mode, path } = record
+  const { fragment, title, mode, path, summary } = record
   if (typeof fragment !== 'string' || typeof title !== 'string' || typeof path !== 'string') return undefined
-  if (mode !== 'inline' && mode !== 'wide') return undefined
-  return { kind: 'visualize', fragment, title, mode, path }
+  if (!isVisualizeMode(mode)) return undefined
+  return { kind: 'visualize', fragment, title, mode, path, ...summaryField(summary) }
+}
+
+/**
+ * The optional summary as a spreadable field: a missing or malformed one is
+ * dropped rather than declining the whole card over a caption.
+ * @param summary - the raw wire value.
+ * @returns `{ summary }` for a non-blank string, otherwise an empty object.
+ */
+function summaryField(summary: unknown): { summary?: string } {
+  return typeof summary === 'string' && summary.trim().length > 0 ? { summary: summary.trim() } : {}
 }
 
 /**
@@ -166,11 +194,13 @@ export function visualizeMetaFromArgs(argsRaw: unknown): VisualizeMeta | undefin
   if (complete !== undefined) {
     // Default action is create. Update's full markup is not in the arguments.
     if (complete['action'] === 'update' && typeof complete['fragment'] !== 'string') return undefined
-    return descriptorFromFields(complete['fragment'], complete['title'], complete['mode'], complete['path'])
+    return descriptorFromFields(
+      complete['fragment'], complete['title'], complete['mode'], complete['path'], complete['summary'],
+    )
   }
   const closed = scanFragment(argsRaw, true)
   if (closed === undefined) return undefined
-  return descriptorFromFields(closed, undefined, undefined, undefined)
+  return descriptorFromFields(closed, undefined, streamedMode(argsRaw), undefined, undefined)
 }
 
 /**
@@ -208,18 +238,32 @@ function descriptorFromFields(
   title: unknown,
   mode: unknown,
   path: unknown,
+  summary: unknown,
 ): VisualizeMeta | undefined {
   if (typeof fragment !== 'string') return undefined
-  if (mode !== undefined && mode !== 'inline' && mode !== 'wide') return undefined
+  if (mode !== undefined && !isVisualizeMode(mode)) return undefined
   const markup = trimStreamingScripts(fragment)
   if (markup.trim().length === 0) return undefined
   return {
     kind: 'visualize',
     fragment: markup,
     title: typeof title === 'string' && title.trim().length > 0 ? title.trim() : 'Visualization',
-    mode: mode === 'wide' ? 'wide' : 'inline',
+    mode: mode ?? 'inline',
     path: typeof path === 'string' ? path : '',
+    ...summaryField(summary),
   }
+}
+
+/**
+ * The `mode` of a still-open argument stream, when its string value has
+ * already closed. A settled-card fallback that mounts before the JSON ends
+ * must not render a page fragment inline just because the object is open.
+ * @param argsRaw - accumulated argument text.
+ * @returns the streamed mode, or undefined when absent, open, or unknown.
+ */
+function streamedMode(argsRaw: string): VisualizeMode | undefined {
+  const match = /"mode"\s*:\s*"([a-z]+)"/u.exec(argsRaw)
+  return match !== null && isVisualizeMode(match[1]) ? match[1] : undefined
 }
 
 /** JSON short escapes, keyed by the character after the backslash. */

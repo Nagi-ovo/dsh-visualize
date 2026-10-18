@@ -69,8 +69,9 @@ the same controls, and add custom CSS only where they run out.
   filters, reset buttons, KPI strips, or status cards. One mechanism per
   piece of state; controls the user asked for and no more.
 - Span the available card width, and let content reflow — stack and wrap on
-  narrow widths. Avoid fixed outer widths, inner scrollbars,
-  `position: fixed`, and viewport-height sizing; the card grows to fit the
-  content's height.
+  narrow widths. In an inline or wide card, avoid fixed outer widths, inner
+  scrollbars, `position: fixed`, and viewport-height sizing; the card grows
+  to fit the content's height. A `page` follows the skill's Page layout
+  section instead: a sticky header and a full-height shell are fine there.
 - Use semantic elements and native keyboard-accessible controls; leave tab
   order and focus outlines alone.

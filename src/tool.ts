@@ -20,7 +20,9 @@ import { SKILL_BODY_PATH, SKILL_RESOURCE_DIR } from './skill.ts'
 import { FragmentLintGate } from './lint-gate.ts'
 import {
   applyFragmentPatch,
+  isVisualizeMode,
   visualizeMetaFrom,
+  VISUALIZE_MODES,
   VISUALIZE_TOOL_NAME,
   type VisualizeAction,
   type VisualizeMode,
@@ -35,7 +37,9 @@ const DESCRIPTION =
   + '<body> — the card supplies the document, stylesheet, and theme). To '
   + 'correct a card you already rendered, call `update` with its `path` and one '
   + 'exact `old_str`/`new_str` replacement instead of re-sending the whole '
-  + 'fragment. The card appears while you generate; a copy of the finished '
+  + 'fragment. `mode: "page"` builds a full standalone page instead of a chat '
+  + 'card: the conversation shows a launcher with a live thumbnail, and the user '
+  + 'opens the page in its own browser tab. The card appears while you generate; a copy of the finished '
   + 'fragment is saved outside the project, per session. Load the `visualize` skill '
   + 'for the authoring contract before your first call. '
   // Agents without a skill tool (the minimal preset exposes only a shell)
@@ -78,8 +82,17 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
       },
       mode: {
         type: 'string',
-        enum: ['inline', 'wide'],
-        description: 'Card width: `inline` (default) or `wide` for side-by-side panel comparisons.',
+        enum: [...VISUALIZE_MODES],
+        description:
+          'Surface: `inline` (default) fits the chat column; `wide` for compact panels that must sit side by side; '
+          + '`page` for a full standalone page (≥1280px wide, any height) the user opens in its own tab from a '
+          + 'launcher card. On update, restate the mode the card was created with.',
+      },
+      summary: {
+        type: 'string',
+        description:
+          'page mode: one short line under the launcher title saying what the page lets the user do. '
+          + 'Restate it on update.',
       },
       path: {
         type: 'string',
@@ -104,7 +117,8 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
           action: { type: 'string', required: true, enum: ['create', 'update'] },
           path: { type: 'string', required: true },
           title: { type: 'string', required: true },
-          mode: { type: 'string', required: true, enum: ['inline', 'wide'] },
+          mode: { type: 'string', required: true, enum: [...VISUALIZE_MODES] },
+          summary: { type: 'string' },
           sizeBytes: { type: 'integer', required: true },
           fragment: { type: 'string', required: true },
           warnings: { type: 'string' },
@@ -116,9 +130,7 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
       // correction patches the new card rather than the superseded one.
       render: (_args, value) => [{
         type: 'text',
-        text: value.action === 'update'
-          ? `Patched "${value.title}" in place (${value.sizeBytes} bytes; updated card at ${value.path}). The user sees the corrected visualization in the conversation; patch that path for any further correction.`
-          : `Rendered "${value.title}" inline (${value.sizeBytes} bytes; saved copy at ${value.path}). The user sees the interactive visualization in the conversation.`,
+        text: resultText(value),
       }, ...value.warnings ? [{ type: 'text' as const, text: value.warnings }] : []],
       // Project the fragment into persisted meta so the card survives replay:
       // the canonical value is not on the wire, only content + meta are.
@@ -128,6 +140,7 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
         title: value.title,
         mode: value.mode,
         path: value.path,
+        ...value.summary === undefined ? {} : { summary: value.summary },
       }),
     },
     // A create writes only a content-addressed card file; concurrent
@@ -137,6 +150,10 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
     isConcurrencySafe: args => (args.action ?? 'create') === 'create',
     async execute(args, exec) {
       const action = (args.action ?? 'create') as VisualizeAction
+      // A page card's file name says so, so a patch that forgets to restate
+      // the mode still re-renders a launcher rather than a 1280px page
+      // squeezed into the chat column.
+      const mode = modeOf(args.mode, args.path !== undefined && action === 'update' && args.path.endsWith(PAGE_SUFFIX))
       // Cards live in a per-session store under the harness home, outside the
       // user's project (see storage.ts); legacy `viz/` workspace copies from
       // earlier sessions stay patchable through the sandboxed fs seam.
@@ -167,17 +184,20 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
       // A patched card keeps its identity only if the caller restates it, so
       // the title is required on update rather than silently re-defaulted.
       const title = action === 'update' ? required(args.title, 'title', action).trim() : args.title?.trim() || 'Visualization'
+      const summary = args.summary?.replaceAll(/\s+/gu, ' ').trim().slice(0, MAX_SUMMARY_CHARS)
       // A create takes a content-addressed name — <slug>-<hash>.html — so
       // re-rendering identical bytes reuses its name.
-      const target = source ?? await store.create(`${slugOf(title)}-${contentHash(fragment)}.html`)
+      const suffix = mode === 'page' ? PAGE_SUFFIX : '.html'
+      const target = source ?? await store.create(`${slugOf(title)}-${contentHash(fragment)}${suffix}`)
       await target.write(fragment)
       return {
         action,
         path: target.displayPath,
         title,
-        mode: (args.mode ?? 'inline') as VisualizeMode,
+        mode,
         sizeBytes,
         fragment,
+        ...summary ? { summary } : {},
         ...warnings ? { warnings } : {},
       }
     },
@@ -196,6 +216,47 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
       return { card: 'generic', title: `Visualization · ${meta.title}` }
     },
   })
+}
+
+/** File-name suffix of a page card, from which an update recovers the mode. */
+const PAGE_SUFFIX = '.page.html'
+
+/** Longest launcher summary kept; the launcher shows one line. */
+const MAX_SUMMARY_CHARS = 200
+
+/**
+ * Resolve the card's surface. The tested hosts check the schema enum before
+ * execute; this keeps an unknown value failing loud on any that do not, not
+ * rendering a card nobody asked for.
+ * @param value - the raw `mode` argument.
+ * @param pageFile - whether an update targets a page card's file.
+ * @returns the mode to render.
+ * @throws Error naming the accepted modes.
+ */
+function modeOf(value: string | undefined, pageFile: boolean): VisualizeMode {
+  if (value === undefined) return pageFile ? 'page' : 'inline'
+  if (!isVisualizeMode(value)) {
+    throw new Error(`invalid visualization: \`mode\` must be one of ${VISUALIZE_MODES.map(m => `"${m}"`).join(', ')}`)
+  }
+  return value
+}
+
+/**
+ * The model-facing confirmation. A page is not visible in the conversation
+ * until the user opens it, and a tab already open keeps the version it was
+ * opened with, so the text says both rather than claiming the user sees it.
+ * @param value - the tool's canonical value.
+ * @returns the one-line confirmation.
+ */
+function resultText(value: { action: VisualizeAction; title: string; mode: VisualizeMode; sizeBytes: number; path: string }): string {
+  if (value.mode === 'page') {
+    return value.action === 'update'
+      ? `Patched page "${value.title}" in place (${value.sizeBytes} bytes; updated card at ${value.path}). The launcher in the conversation now opens the corrected page; a tab the user already opened keeps the old version until they open it again. Patch that path for any further correction.`
+      : `Rendered "${value.title}" as a page (${value.sizeBytes} bytes; saved copy at ${value.path}). The conversation shows a launcher card with a live thumbnail; the user opens the full page in its own tab from its button.`
+  }
+  return value.action === 'update'
+    ? `Patched "${value.title}" in place (${value.sizeBytes} bytes; updated card at ${value.path}). The user sees the corrected visualization in the conversation; patch that path for any further correction.`
+    : `Rendered "${value.title}" inline (${value.sizeBytes} bytes; saved copy at ${value.path}). The user sees the interactive visualization in the conversation.`
 }
 
 /**

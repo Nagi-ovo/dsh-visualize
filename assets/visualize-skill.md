@@ -3,7 +3,8 @@
 Build small interactive surfaces the user can explore right inside the chat:
 parameter-driven simulations, algorithm walkthroughs, charts and plots,
 side-by-side comparisons, and product-screen mockups. The `visualize` tool
-renders your markup as a live sandboxed card in the conversation.
+renders your markup as a live sandboxed card in the conversation, or, for
+something to work in rather than glance at, as a full page in its own tab.
 
 - Reach for a card when seeing or manipulating something answers the question
   better than prose would. A request that merely mentions data or a web page
@@ -38,15 +39,48 @@ and a copy of the finished fragment is saved outside the user's project, in
 this conversation's own card store; the result names its `path`. Never write
 the fragment into the workspace yourself.
 
-Reserve `mode: "wide"` for layouts where several compact panels must sit
-beside each other to be compared; a single dense chart or a full-page mockup
-stays at the default width.
+## Choosing the surface
+
+- `inline` (default): the card answers the question at hand, fits the chat
+  column, and stays within about one and a half screens.
+- `wide`: several compact panels must sit side by side to be compared. A
+  single dense chart stays inline.
+- `page`: the user will *use* the thing rather than glance at it in passing —
+  a multi-view tool, a dashboard with filters, a full-screen simulation, map,
+  3D scene or large graph, a long multi-step walkthrough, a full desktop
+  mockup — or they ask for a separate page or full screen. The chat shows a
+  launcher card with a live thumbnail; the user opens the page in its own tab.
+  Pass a `summary`: one short line saying what the page lets them do.
+
+A page is still a fragment under every rule below, not a project file. If
+they want a page *in their app* or a file to keep, build project files.
+
+## Page layout
+
+Design a `page` for a desktop browser tab (1280px and wider, any height),
+not the chat column:
+
+- Wrap it as `<header class="viz-page-header">` (title, then the controls in
+  a `.viz-controls` group; it sticks to the top) followed by
+  `<main class="viz-page">` (a centred container; add `viz-page-narrow` for
+  reading-width content). Group content in `<section class="viz-section">`
+  with its own heading.
+- Several views go behind tabs: `.viz-tabs` holding `<button
+  class="viz-tab" role="tab" aria-selected="true|false">`. Every filter
+  visibly changes every view it governs.
+- Lay out with grid: a KPI row, then charts two or three across, then
+  detail tables. Reflow to one column below about 768px.
+- The document scrolls; `min-height: 100vh` is fine on a full-screen canvas
+  or the outer shell, never a fixed `height: 100vh` on content that must
+  scroll. A canvas sizes to its container, not to a fixed pixel width.
+- Build the controls the task needs, not a generic admin template.
 
 ## Revising a card
 
 Correcting a rendered card by re-sending its whole markup costs as much as
 drawing it again and invites unrequested redesign, so patch it instead:
-`action: "update"` with the card's `path`, its `title` restated, and one exact
+`action: "update"` with the card's `path`, its `title` restated (and, for a
+page, its `summary`, or the launcher loses its caption), and one exact
 `old_str` → `new_str` replacement.
 
 - Patch when the correction touches fewer than 20 lines in fewer than 5
@@ -64,6 +98,8 @@ drawing it again and invites unrequested redesign, so patch it instead:
   than re-rendering blind.
 - The card reloads on every change, so anything the user typed, dragged, or
   scrolled inside it resets. Batch corrections instead of trickling them.
+- A page tab the user already opened keeps its old version; after patching
+  a page, tell them to open it again.
 
 ## Fragment rules
 

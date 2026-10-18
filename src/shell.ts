@@ -14,7 +14,7 @@
  * @module @nagi-ovo/dsh-visualize/shell
  */
 
-import { FRAME_CSS } from './frame-css.ts'
+import { FRAME_CSS, PAGE_CSS } from './frame-css.ts'
 
 /** CDN origins a fragment may load static resources from. */
 export const RESOURCE_ORIGINS = [
@@ -70,11 +70,21 @@ export interface FrameDocOptions {
    * several sibling frames attribute messages; the tool callId in production.
    */
   reportToken: string
+  /**
+   * Which surface the document fills: `card` (default) sits in the chat
+   * column with a small inset and a transparent body; `page` fills a browser
+   * tab with an opaque surface and the page layout classes ({@link PAGE_CSS}).
+   * The CSP and the height reporter are the same for both.
+   */
+  variant?: FrameVariant
 }
+
+/** Surface a frame document is laid out for. */
+export type FrameVariant = 'card' | 'page'
 
 /**
  * Assemble the complete srcdoc document for one visualization frame.
- * @param options - fragment, title, bridged palette, and report token.
+ * @param options - fragment, title, bridged palette, report token, and surface variant.
  * @returns the HTML document string for the iframe's `srcDoc`.
  */
 export function buildFrameDoc(options: FrameDocOptions): string {
@@ -91,9 +101,9 @@ export function buildFrameDoc(options: FrameDocOptions): string {
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}">
 <title>${escapeHtml(options.title)}</title>
-<style>${FRAME_CSS}
+<style>${FRAME_CSS}${options.variant === 'page' ? PAGE_CSS : ''}
 :root { ${rootVars} color-scheme: ${options.colorScheme}; }
-body { padding: 4px 2px; }</style>
+${options.variant === 'page' ? '' : 'body { padding: 4px 2px; }'}</style>
 </head>
 <body>
 ${options.fragment}

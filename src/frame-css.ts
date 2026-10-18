@@ -134,3 +134,51 @@ th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--bor
 th { font-weight: 500; color: var(--muted-foreground); font-size: 12px; }
 .table-responsive { overflow-x: auto; }
 `
+
+/**
+ * Additions for a `page` frame: a full browser tab rather than a card in the
+ * chat column. The surface turns opaque (a sticky header must cover what
+ * scrolls under it), the body drops the card inset so a header can run
+ * edge to edge, and a few layout classes cover the page skeleton the skill
+ * teaches: a sticky header, a centred content container, sections, tabs.
+ */
+export const PAGE_CSS = `
+:root { --background: var(--dsh-viz-page, light-dark(rgb(255 255 255), rgb(24 24 27))); }
+html { background: var(--background); }
+body { min-height: 100vh; }
+.viz-page { max-width: 1440px; margin: 0 auto; padding: 24px clamp(16px, 3vw, 40px) 48px; }
+.viz-page-narrow { max-width: 960px; }
+.viz-page-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 12px clamp(16px, 3vw, 40px);
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+}
+.viz-page-header h1 { margin: 0; font-size: 1.25em; }
+.viz-page-header .viz-controls { margin: 0 0 0 auto; }
+.viz-section { margin-top: 32px; }
+.viz-section:first-child { margin-top: 0; }
+.viz-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.viz-tab {
+  appearance: none;
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+.viz-tab:hover { color: var(--foreground); }
+.viz-tab[aria-selected='true'] { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 500; }
+@media (max-width: 768px) {
+  .viz-page-header .viz-controls { margin-left: 0; width: 100%; }
+}
+`

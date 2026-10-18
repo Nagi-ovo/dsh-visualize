@@ -14,6 +14,8 @@
 const TOKEN_BRIDGE: readonly (readonly [string, string])[] = [
   ['foreground', '--dsw-alias-label-primary'],
   ['card', '--dsw-alias-bg-layer-1'],
+  // The conversation surface itself, which a page frame fills its tab with.
+  ['page', '--dsw-alias-bg-base'],
   ['muted-foreground', '--dsw-alias-label-caption'],
   ['border', '--dsw-alias-border-l2'],
   ['primary', '--dsw-alias-brand-primary-new-colorprimary-new-color'],
