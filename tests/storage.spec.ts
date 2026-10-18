@@ -58,7 +58,7 @@ describe('card storage', () => {
     const tool = visualizeTool(ctx, 10_000)
     const created = await tool.execute({ fragment: '<p>p99 480ms</p>', title: 'Lab' }, exec('sess-1')) as { path: string }
 
-    expect(created.path).toMatch(new RegExp(`^${home}/visualize/sessions/sess-1/lab-[0-9a-f]{8}\\.html$`))
+    expect(created.path).toMatch(new RegExp(`^${home}/visualize/sessions/sess-1/lab-[0-9a-f]{8}\\.whale\\.html$`))
     expect(await readFile(created.path, 'utf8')).toBe('<p>p99 480ms</p>')
     expect(seam.resolved).toEqual([])
     expect(await readdir(workspace)).toEqual([])
@@ -97,11 +97,36 @@ describe('card storage', () => {
     await expect(readdir(join(home, 'visualize'))).rejects.toThrow()
   })
 
+  it('keeps the style a card was created with when it is patched after the setting changed', async () => {
+    const { ctx } = host()
+    const created = await visualizeTool(ctx, 10_000, 'editorial')
+      .execute({ fragment: '<p>p99 480ms</p>', title: 'Lab' }, exec('sess-7')) as { path: string; style: string }
+    expect(created.style).toBe('editorial')
+
+    const patched = await visualizeTool(ctx, 10_000, 'sketch').execute(
+      { action: 'update', path: created.path, title: 'Lab', old_str: '480', new_str: '410' },
+      exec('sess-7'),
+    ) as { path: string; style: string; fragment: string }
+    expect(patched.style).toBe('editorial')
+    expect(patched.path).toBe(created.path)
+    // The model reads and patches the stored copy: it carries no style marker.
+    expect(await readFile(created.path, 'utf8')).toBe('<p>p99 410ms</p>')
+  })
+
+  it('patches a card named before styles existed in the current setting', async () => {
+    const { ctx } = host({ files: { 'viz/lab-0badf00d.html': '<p>old</p>' } })
+    const value = await visualizeTool(ctx, 10_000, 'sketch').execute(
+      { action: 'update', path: 'viz/lab-0badf00d.html', title: 'Lab', old_str: 'old', new_str: 'new' },
+      exec('sess-8'),
+    ) as { style: string }
+    expect(value.style).toBe('sketch')
+  })
+
   it('falls back to the workspace copy when the host has no home path', async () => {
     const { ctx, seam } = host({ homePath: false })
     const tool = visualizeTool(ctx, 10_000)
     const value = await tool.execute({ fragment: '<p>x</p>', title: 'Lab' }, exec('sess-3')) as { path: string }
-    expect(value.path).toMatch(/^viz\/lab-[0-9a-f]{8}\.html$/u)
+    expect(value.path).toMatch(/^viz\/lab-[0-9a-f]{8}\.whale\.html$/u)
     expect(Object.keys(seam.written)).toEqual([value.path])
   })
 

@@ -25,6 +25,7 @@ const PAGE: VisualizeMeta = {
   mode: 'page',
   path: '/home/visualize/sessions/s/dash-0badf00d.page.html',
   summary: '按地区和日期筛选的销售概览',
+  style: 'whale',
 }
 
 describe('page frame document', () => {

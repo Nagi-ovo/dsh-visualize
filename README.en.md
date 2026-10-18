@@ -37,11 +37,36 @@ Tell the model what you want to explore, for example, “make an adjustable visu
 
 When the thing to build is bigger than a chat card, such as a dashboard with filters, a multi-view tool, a full-screen simulation, or a complete desktop mockup, the model builds a standalone page with `mode: "page"`. The conversation shows a launcher card with the title, a one-line description (the `summary` argument), a live thumbnail of the page, and an **Open page** button that opens the page full-size in a new tab. If the browser blocks the tab, **Show here** displays the page in the conversation instead. After an `update`, a tab you already opened keeps the old version; click **Open page** again to see the change.
 
-Cards follow the DSH light or dark theme and whale-blue palette. When the chat column is too narrow, the **Open in new window** button at the right of the card header opens the card full-size in its own tab, themed as DSH was when you opened it and still running inside the same sandboxed iframe. Session replay restores cards from the persistent tool result, so the original fragment file does not need to remain on disk.
+Cards follow the DSH light or dark theme and, in the default style, its whale-blue palette (other styles below). When the chat column is too narrow, the **Open in new window** button at the right of the card header opens the card full-size in its own tab, themed as DSH was when you opened it and still running inside the same sandboxed iframe. Session replay restores cards from the persistent tool result, so the original fragment file does not need to remain on disk.
 
-A copy of each card's fragment is saved to `~/.dsh/visualize/sessions/<session id>/<title>-<hash>.html` (under `$DSH_HOME/visualize/` when `DSH_HOME` is set), one directory per conversation and never inside your project, so `git status` stays free of `viz/`. `update` patches that copy. Cards that older versions wrote under `viz/` in the workspace can still be updated in place. The plugin does not clean these files up; you can delete `~/.dsh/visualize/` at any time and existing conversations still replay their cards.
+A copy of each card's fragment is saved to `~/.dsh/visualize/sessions/<session id>/<title>-<hash>.<style>.html` (under `$DSH_HOME/visualize/` when `DSH_HOME` is set), one directory per conversation and never inside your project, so `git status` stays free of `viz/`. `update` patches that copy. Cards that older versions wrote under `viz/` in the workspace can still be updated in place. The plugin does not clean these files up; you can delete `~/.dsh/visualize/` at any time and existing conversations still replay their cards.
 
 By default DSH folds a finished turn's tool process. While it does, the turn's cards also appear under the final answer, so you see them without opening the process; with Work details set to Verbose they stay in place only.
+
+## Card styles
+
+The plugin ships five card styles. Pick one with `style` under Settings → Plugins → dsh-visualize in DSH (or in your profile config); the default is `whale`:
+
+| `style` | Look | Good for |
+| --- | --- | --- |
+| `whale` | Whale blue (default): the DSH palette and system type | anything |
+| `editorial` | Serif headline that states the finding, one highlighted line with the rest in grey, direct labels | trends, comparisons, "what does this number say" |
+| `paper` | Serif type, L-shaped axes, colour-blind-safe palette, colour plus marker double encoding, "Figure 1 ·" captions | results, learning curves, explanations with formulas |
+| `sketch` | Handwritten type, rough.js strokes, highlighter notes | concepts, intuition, flows |
+| `terminal` | Monospace, square corners, dashed grid, key–value labels | latency, throughput, step-by-step algorithms |
+
+A style has two layers. The card shell injects the colours, fonts, radius and chart defaults (grid, axis lines, line width), each tuned for both light and dark themes, with the background left transparent. The layout and writing conventions (how titles read, captions, rough.js) are a short guide appended to the skill for the model. That guide replaces only the taste advice in `design.md`: fragment rules, the CSP, theme variables, the 11px floor and lint still apply. Product UI mockups ignore the style and follow the product being drawn.
+
+Each card records the style it was created with in its persisted result and in its saved copy's file name, so changing the setting later leaves existing cards alone, on replay, in "Open in new window", and when the model patches one with `update`. Cards saved before styles existed have no style in their name, and an `update` re-renders them in the current setting. The preview that renders while the model is still writing a card reads the setting when the DSH page loads, so reload open pages after changing it. `editorial`, `paper`, `sketch` and `terminal` load their fonts from Google Fonts; `paper` loads KaTeX only when a card contains formulas.
+
+### Custom styles
+
+Write your preferences in plain language in a Markdown file, e.g. "dark green accent, titles under eight words, one decimal place". The plugin appends it after the built-in guide:
+
+- Global: `~/.dsh/visualize/style.md` (`$DSH_HOME/visualize/style.md` when `DSH_HOME` is set), for every session.
+- Workspace: `<workspace>/.dsh/visualize-style.md`, for sessions in that workspace only.
+
+When they conflict, what you say in the conversation wins, then the workspace file, then the global file, then the built-in style. Only the first 4 KB of each file is read, and a missing file is skipped. Edits apply the next time the model loads the visualize skill (usually the first card of a new session). A custom style changes how the model writes cards, not the colours and fonts the shell injects; to change colours, say so in the file and the model overrides the matching theme variables on the card's root element.
 
 ## Security
 

@@ -2,7 +2,9 @@
 
 ## Taste
 
-The difference between a widget and a good widget is restraint.
+The difference between a widget and a good widget is restraint. This is the
+default taste; where the active card style's guide (at the end of the skill)
+says otherwise, the style wins.
 
 - Give the visual room. Work on an 8px spacing rhythm; whitespace is part of
   the design, not wasted area. When in doubt, remove a panel rather than
@@ -39,7 +41,13 @@ theme switches live.
   `--card-foreground`, `--muted-foreground`, `--border`.
 - Accent: `--primary`, `--primary-foreground`.
 - Series palette: `--viz-series-1` … `--viz-series-6`; `--viz-series-1` is
-  the single measure / active element.
+  the single measure / active element. `--viz-context` is the grey for
+  series drawn only as context behind the one that matters.
+- Chart structure: `--viz-grid` (gridlines) and `--viz-axis` (axis lines).
+- Type: `--font-sans` (body), `--font-display` (headings), `--font-mono`;
+  `--font-size-base` and `--font-size-small` (never below 11px). Use
+  `var(--font-mono)` rather than naming a monospace family.
+- Shape: `--radius`.
 - SVG text takes `fill: var(--foreground)` at 11px effective size or larger;
   canvas (Chart.js) text follows the same floor — see `charts.md`.
 

@@ -32,6 +32,7 @@ import { visualizeMetaFrom, visualizeMetaFromArgs, type VisualizeMeta } from '..
 import { buildFrameDoc, HEIGHT_MESSAGE_TYPE, type FrameVariant } from '../shell.ts'
 import { buildWindowDoc, FRAME_SANDBOX } from '../window-doc.ts'
 import { resolveTheme } from './theme.ts'
+import { liveStyle, noteSettledStyle } from './style.ts'
 
 /** Iframe height bounds; content beyond the cap scrolls inside the frame. */
 const MIN_HEIGHT = 48
@@ -104,6 +105,7 @@ export function openInWindow(meta: VisualizeMeta, callId: string): void {
     title: meta.title,
     themeVars,
     colorScheme,
+    style: meta.style,
     // Distinct from the in-chat token, so these reports never size a card.
     reportToken: `window:${callId}`,
     variant,
@@ -204,7 +206,9 @@ function useFrameDoc(meta: VisualizeMeta, reportToken: string, variant: FrameVar
   const themeTick = useThemeTick()
   return useMemo(() => {
     const { themeVars, colorScheme } = resolveTheme()
-    return buildFrameDoc({ fragment: meta.fragment, title: meta.title, themeVars, colorScheme, reportToken, variant })
+    return buildFrameDoc({
+      fragment: meta.fragment, title: meta.title, themeVars, colorScheme, reportToken, variant, style: meta.style,
+    })
     // themeTick is the deliberate re-resolution trigger for the palette read.
   }, [meta, reportToken, variant, themeTick])
 }
@@ -437,13 +441,16 @@ export function VisualizeCard({ callId, block }: ToolCallViewProps) {
   const argsRaw = 'kind' in block ? block.call?.argsRaw : 'argsRaw' in block ? block.argsRaw : undefined
   if (!('kind' in block)) {
     const live = visualizeMetaFromArgs(argsRaw)
-    if (live !== undefined) return <Frame meta={live} callId={callId} />
+    if (live !== undefined) return <Frame meta={{ ...live, style: liveStyle() }} callId={callId} />
     return <div style={headerStyle}>Visualize · rendering…</div>
   }
   if (block.isError) {
     return <div style={headerStyle}>Visualize · {firstResultLine(block.content)}</div>
   }
-  const meta = visualizeMetaFrom(block.meta) ?? visualizeMetaFromArgs(argsRaw)
+  const persisted = visualizeMetaFrom(block.meta)
+  if (persisted !== undefined) noteSettledStyle(persisted.style, argsRaw)
+  const fromArgs = persisted === undefined ? visualizeMetaFromArgs(argsRaw) : undefined
+  const meta = persisted ?? (fromArgs === undefined ? undefined : { ...fromArgs, style: liveStyle() })
   if (meta === undefined) {
     // A settled call without either the descriptor or a parseable fragment:
     // show the durable result text instead of guessing at markup.

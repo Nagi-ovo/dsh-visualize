@@ -34,6 +34,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import { extractStreamingFragment, trimStreamingScripts, VISUALIZE_TOOL_NAME } from '../fragment.ts'
 import { buildStreamShellDoc, HEIGHT_MESSAGE_TYPE, STREAM_MESSAGE_TYPE } from '../shell.ts'
 import { resolveTheme } from './theme.ts'
+import { liveStyle } from './style.ts'
 
 /** Definition kind and Turn data key; namespaced by package to stay unique. */
 export const STREAM_KEY = 'dsh-visualize-stream'
@@ -301,6 +302,7 @@ function Preview({ argsRaw }: { argsRaw: string }) {
   const doc = useMemo(() => buildStreamShellDoc({
     ...resolveTheme(),
     reportToken: 'streaming-preview',
+    style: liveStyle(),
   }), [])
   useEffect(() => {
     if (!loaded || !hasContent) return

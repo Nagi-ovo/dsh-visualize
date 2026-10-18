@@ -65,10 +65,17 @@ describe('validateFragment', () => {
 })
 
 describe('visualizeMetaFrom', () => {
-  const valid = { kind: 'visualize', fragment: '<div id="x"></div>', title: 'X', mode: 'inline', path: 'viz/x.html' }
+  const valid = { kind: 'visualize', fragment: '<div id="x"></div>', title: 'X', mode: 'inline', path: 'viz/x.html', style: 'editorial' }
 
   it('narrows a well-formed persisted descriptor', () => {
     expect(visualizeMetaFrom(valid)).toEqual(valid)
+  })
+
+  it('replays cards without a known style in the default style', () => {
+    const { style: _, ...legacy } = valid
+    expect(visualizeMetaFrom(legacy)?.style).toBe('whale')
+    expect(visualizeMetaFrom({ ...valid, style: 'neon' })?.style).toBe('whale')
+    expect(visualizeMetaFrom({ ...valid, style: 42 })?.style).toBe('whale')
   })
 
   it('declines wire shapes it cannot trust', () => {
@@ -94,6 +101,7 @@ describe('visualizeMetaFromArgs', () => {
       title: 'Latency',
       mode: 'wide',
       path: 'viz/lab.html',
+      style: 'whale',
     })
   })
 
@@ -104,6 +112,7 @@ describe('visualizeMetaFromArgs', () => {
       title: 'Visualization',
       mode: 'inline',
       path: '',
+      style: 'whale',
     })
   })
 
@@ -138,6 +147,7 @@ describe('visualizeMetaFromArgs', () => {
       title: 'Visualization',
       mode: 'inline',
       path: '',
+      style: 'whale',
     })
   })
 

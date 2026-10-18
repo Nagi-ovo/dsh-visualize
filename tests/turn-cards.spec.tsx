@@ -22,7 +22,7 @@ import type { VisualizeMeta } from '../src/fragment.ts'
 
 /** A well-formed persisted descriptor. */
 function meta(path: string, title = path): VisualizeMeta {
-  return { kind: 'visualize', fragment: `<div>${title}</div>`, title, mode: 'inline', path }
+  return { kind: 'visualize', fragment: `<div>${title}</div>`, title, mode: 'inline', path, style: 'whale' }
 }
 
 /** A `tool/result` event as the host logs it. */

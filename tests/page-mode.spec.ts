@@ -16,6 +16,7 @@ const PAGE: VisualizeMeta = {
   mode: 'page',
   path: '/home/visualize/sessions/s/dash-0badf00d.page.html',
   summary: '按地区和日期筛选的销售概览',
+  style: 'whale',
 }
 
 /** Workspace-fallback host: no home path, an in-memory fs seam. */
@@ -46,7 +47,7 @@ describe('visualize page mode, tool side', () => {
     ) as Value
     expect(value.mode).toBe('page')
     expect(value.summary).toBe('filter by region')
-    expect(value.path).toMatch(/\/viz\/dash-[0-9a-f]{8}\.page\.html$/)
+    expect(value.path).toMatch(/\/viz\/dash-[0-9a-f]{8}\.whale\.page\.html$/)
 
     const text = tool.output!.render!({} as never, value as never) as { text: string }[]
     expect(text[0]!.text).toMatch(/^Rendered "Dash" as a page/)

@@ -118,7 +118,7 @@ export const LINT_RULES = {
   VZ104: {
     severity: 'warn',
     message: "Chart.defaults.font.family = 'inherit' is not a canvas font, so chart text falls back to the browser default",
-    fix: 'set Chart.defaults.font.family = getComputedStyle(document.body).fontFamily',
+    fix: 'call dshViz.chartDefaults(Chart, root), which sets the card style\'s computed font, or set Chart.defaults.font.family = getComputedStyle(document.body).fontFamily',
   },
   VZ105: {
     severity: 'warn',

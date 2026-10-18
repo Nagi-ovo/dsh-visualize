@@ -3,7 +3,7 @@
  * again.
  *
  * New cards go to a per-session store under the harness home —
- * `$DSH_HOME/visualize/sessions/<session>/<slug>-<hash>.html` — never into the
+ * `$DSH_HOME/visualize/sessions/<session>/<slug>-<hash>.<style>.html` — never into the
  * user's project, so `git status` stays clean and conversations do not mix.
  * The plugin owns these files and writes them with its own node fs: the store
  * sits outside every sandbox write root, and the model never addresses it
@@ -141,7 +141,7 @@ async function realpathOfDeepest(target: string): Promise<string> {
  * @param ctx - registrant context.
  * @returns the absolute root, or undefined on a host without `dshHomePath`.
  */
-function storeRoot(ctx: Context): string | undefined {
+export function storeRoot(ctx: Context): string | undefined {
   let homePath: unknown
   try {
     homePath = ctx.get('dshHomePath')

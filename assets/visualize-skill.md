@@ -143,6 +143,31 @@ retrying.
 - Before finishing, confirm every element your script queries exists, every
   identifier is defined, and the main interaction visibly changes the output.
 
+## Card style
+
+The user picks a card style in the plugin settings. The active one is
+appended at the end of this skill under "Active card style", together with
+any style files the user wrote. A card's look has two layers:
+
+- The frame applies the style's hard parts on its own: colour tokens, fonts,
+  radius, text sizes, and the chart defaults `dshViz.chartDefaults` sets (see
+  `references/charts.md`). Keep using the theme variables and base classes;
+  do not restate a style's colour values or load its fonts yourself.
+- The style guide and the user's style files replace only the Taste section
+  of `references/design.md`. Everything else in this skill still applies:
+  the fragment rules, theme variables and `light-dark()`, the 11px floor, the
+  size limit, the CDN allowlist, the chart setup, and every lint finding. A
+  style that says "no gradient fills" overrides the default gradient; no
+  style lets a card fetch, skip the theme variables, or set `color-scheme`.
+- When they disagree, the order is: what the user asks for in this
+  conversation, then the workspace style file, then the global style file,
+  then the built-in style.
+- Product-screen mockups ignore the card style. Draw them in the product's
+  own colours, type and radius, still as `light-dark()` pairs.
+- When a user style asks for specific colours, set them as custom properties
+  on your root element (`#my-viz { --viz-series-1: light-dark(#…, #…); }`);
+  your CSS and `dshViz.chartDefaults(Chart, root)` both read them there.
+
 ## In the reply
 
 Around the card, write only what helps the user read or act on it — one or

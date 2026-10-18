@@ -2,7 +2,9 @@
  * Bundled `visualize` skill provider: the fragment-authoring contract the
  * model loads before its first `visualize` call. Mirrors the official
  * `dsh-skill-badge` provider shape — one bundled candidate whose body ships
- * in this package's `assets/`.
+ * in this package's `assets/`. The body ends with the active card style's
+ * guide and the user's style files (style-guide.ts), read on every load so an
+ * edited style file applies from the next skill load on.
  *
  * @module @nagi-ovo/dsh-visualize/skill
  */
@@ -15,6 +17,8 @@ import {
   type SkillDefinition,
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
+import { activeStyleSection, type StyleFileLocations } from './style-guide.ts'
+import { DEFAULT_STYLE, type StyleId } from './style.ts'
 
 const PROVIDER_NAME = 'dsh-visualize'
 const SKILL_BODY_URL = new URL('../assets/visualize-skill.md', import.meta.url)
@@ -48,19 +52,31 @@ const CANDIDATE: SkillCandidate = {
   locator: SKILL_BODY_URL,
 }
 
-/** The bundled provider registered on `ctx.skills`. */
-export const visualizeSkillProvider: SkillProvider = {
-  name: PROVIDER_NAME,
-  list: () => Promise.resolve([CANDIDATE]),
-  async get(_candidate): Promise<SkillDefinition> {
-    return {
-      name: CANDIDATE.name,
-      description: CANDIDATE.description,
-      invocation: CANDIDATE.invocation,
-      provider: CANDIDATE.provider,
-      source: CANDIDATE.source,
-      resourceBase: RESOURCE_BASE,
-      content: await readFile(SKILL_BODY_URL, 'utf8'),
-    }
-  },
+/**
+ * Build the bundled provider registered on `ctx.skills`.
+ * @param style - the configured card style.
+ * @param locate - where the user's style files are for a lookup's workspace
+ *   (`cwd`; absent when the lookup has no session, which reads the global file alone).
+ * @returns the provider.
+ */
+export function visualizeSkillProvider(
+  style: StyleId = DEFAULT_STYLE,
+  locate: (cwd: string | undefined) => StyleFileLocations = () => ({}),
+): SkillProvider {
+  return {
+    name: PROVIDER_NAME,
+    list: () => Promise.resolve([CANDIDATE]),
+    async get(_candidate, options): Promise<SkillDefinition> {
+      const body = await readFile(SKILL_BODY_URL, 'utf8')
+      return {
+        name: CANDIDATE.name,
+        description: CANDIDATE.description,
+        invocation: CANDIDATE.invocation,
+        provider: CANDIDATE.provider,
+        source: CANDIDATE.source,
+        resourceBase: RESOURCE_BASE,
+        content: body + await activeStyleSection(style, locate(options?.cwd)),
+      }
+    },
+  }
 }

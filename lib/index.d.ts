@@ -1,21 +1,37 @@
 import z from "@deepseek-ai/schemastery";
 import "@deepseek-ai/dsh-tools";
 import { Context } from "@deepseek-ai/cordis";
-//#region src/fragment.d.ts
+//#region src/style.d.ts
 /**
- * Pure fragment contract shared by the tool (validation at execute time), the
- * browser card (meta narrowing at render time), and the specs. No I/O and no
- * DOM so both halves and vitest can load it unchanged.
+ * Card style presets: the user-chosen half of a card's look. The base
+ * contract (fragment rules, CSP, size, theme-variable use, the 11px floor,
+ * lint) belongs to the plugin and no style can change it; a style only
+ * supplies
  *
- * A *fragment* is the model-authored inline-HTML body of one visualization:
- * literal markup without a document skeleton. The card owns the skeleton — it
- * wraps the fragment in a sandboxed iframe document with its own CSP — so a
- * fragment that ships its own `<!doctype>`/`<html>`/`<head>`/`<body>` would
- * nest documents and is rejected loudly instead of rendered broken (see
- * `lint.ts` for that rule and the rest of the contract's rule table).
+ * - hard style, injected by the frame shell and therefore deterministic:
+ *   values for the frame's `--dsh-viz-*` hooks (one `light-dark()` value
+ *   covers both appearances, because the frame's `color-scheme` follows the
+ *   host), an optional webfont stylesheet, a small scoped CSS block, and the
+ *   chart defaults `dshViz.chartDefaults` applies on top of the tokens;
+ * - soft style, a short prose guide (`assets/styles/<id>.md`) the skill
+ *   provider appends to the skill body, which overrides only the taste
+ *   guidance in `references/design.md`.
  *
- * @module @nagi-ovo/dsh-visualize/fragment
+ * Every preset leaves the background transparent so the card sits on the
+ * host's chat surface. Values were contrast- and colour-vision-checked
+ * against the host surfaces (light #ffffff/#f5f6f7, dark #151517/#232324).
+ *
+ * Pure and DOM-free: the node half reads ids and prose paths, the browser
+ * card reads the hard style for the id persisted in each card's meta.
+ *
+ * @module @nagi-ovo/dsh-visualize/style
  */
+/** Every built-in style id, in settings order; the first is the default. */
+declare const STYLE_IDS: readonly ["whale", "editorial", "paper", "sketch", "terminal"];
+/** One built-in style id. */
+type StyleId = typeof STYLE_IDS[number];
+//#endregion
+//#region src/fragment.d.ts
 /**
  * Wire name of the tool, the keyed toolview, and the streaming-preview match.
  * Lives in this pure module so the browser half can import it without pulling
@@ -42,6 +58,12 @@ interface VisualizeMeta {
   path: string;
   /** One-line description a page launcher shows under its title; absent when none was given. */
   summary?: string;
+  /**
+   * Card style the card was created under, so replay and the windowed view
+   * keep its look after the setting changes. Absent on cards from before
+   * styles existed, which read as the default.
+   */
+  style: StyleId;
 }
 /**
  * Narrow one persisted `tool/result` meta value to a {@link VisualizeMeta}.
@@ -76,6 +98,12 @@ interface Config {
    * same ceiling bounds what one call adds to the session log.
    */
   maxFragmentBytes: number;
+  /**
+   * Card style for new cards: colours, fonts and chart defaults the frame
+   * applies, plus a style guide appended to the skill. Each card keeps the
+   * style it was created with.
+   */
+  style: StyleId;
 }
 /** Schemastery configuration validated by the Loader. */
 declare const Config: z<Config>;
@@ -86,4 +114,4 @@ declare const Config: z<Config>;
  */
 declare function apply(ctx: Context, config: Config): void;
 //#endregion
-export { Config, VISUALIZE_TOOL_NAME, type VisualizeMeta, type VisualizeMode, apply, inject, name, validateFragment, visualizeMetaFrom };
+export { Config, STYLE_IDS, type StyleId, VISUALIZE_TOOL_NAME, type VisualizeMeta, type VisualizeMode, apply, inject, name, validateFragment, visualizeMetaFrom };

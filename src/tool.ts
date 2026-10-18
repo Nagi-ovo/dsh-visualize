@@ -18,6 +18,8 @@ import type {} from '@deepseek-ai/dsh-fs'
 import { cardStore, type CardFile } from './storage.ts'
 import { SKILL_BODY_PATH, SKILL_RESOURCE_DIR } from './skill.ts'
 import { FragmentLintGate } from './lint-gate.ts'
+import { DEFAULT_STYLE, STYLE_IDS, type StyleId } from './style.ts'
+import { styleToolNote } from './style-guide.ts'
 import {
   applyFragmentPatch,
   isVisualizeMode,
@@ -54,13 +56,14 @@ const DESCRIPTION =
  * Build the `visualize` tool definition over the composed filesystem seam.
  * @param ctx - registrant context carrying `ctx.fs` and the host home path for the card copy.
  * @param maxFragmentBytes - deployment size ceiling for one fragment.
+ * @param style - configured card style, recorded in each new card's meta.
  * @returns the tool definition to register on `ctx.tools`.
  */
-export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefinition {
+export function visualizeTool(ctx: Context, maxFragmentBytes: number, style: StyleId = DEFAULT_STYLE): ToolDefinition {
   const lint = new FragmentLintGate()
   return defineTool({
     name: VISUALIZE_TOOL_NAME,
-    description: DESCRIPTION,
+    description: DESCRIPTION + styleToolNote(style),
     parameters: {
       action: {
         type: 'string',
@@ -122,6 +125,7 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
           sizeBytes: { type: 'integer', required: true },
           fragment: { type: 'string', required: true },
           warnings: { type: 'string' },
+          style: { type: 'string' },
         },
       },
       // Model-facing text stays a confirmation: the fragment is already in the
@@ -141,6 +145,7 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
         mode: value.mode,
         path: value.path,
         ...value.summary === undefined ? {} : { summary: value.summary },
+        style: value.style ?? DEFAULT_STYLE,
       }),
     },
     // A create writes only a content-addressed card file; concurrent
@@ -185,10 +190,13 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
       // the title is required on update rather than silently re-defaulted.
       const title = action === 'update' ? required(args.title, 'title', action).trim() : args.title?.trim() || 'Visualization'
       const summary = args.summary?.replaceAll(/\s+/gu, ' ').trim().slice(0, MAX_SUMMARY_CHARS)
-      // A create takes a content-addressed name — <slug>-<hash>.html — so
-      // re-rendering identical bytes reuses its name.
+      // A create takes a content-addressed name — <slug>-<hash>.<style>.html —
+      // so re-rendering identical bytes in the same style reuses its name. An
+      // update keeps the style its card was created with, which that name
+      // records; a legacy name without one takes the current setting.
+      const cardStyle = action === 'update' ? styleOfCardPath(args.path!) ?? style : style
       const suffix = mode === 'page' ? PAGE_SUFFIX : '.html'
-      const target = source ?? await store.create(`${slugOf(title)}-${contentHash(fragment)}${suffix}`)
+      const target = source ?? await store.create(`${slugOf(title)}-${contentHash(fragment)}.${cardStyle}${suffix}`)
       await target.write(fragment)
       return {
         action,
@@ -198,6 +206,7 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
         sizeBytes,
         fragment,
         ...summary ? { summary } : {},
+        style: cardStyle,
         ...warnings ? { warnings } : {},
       }
     },
@@ -220,6 +229,24 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number): ToolDefin
 
 /** File-name suffix of a page card, from which an update recovers the mode. */
 const PAGE_SUFFIX = '.page.html'
+
+/**
+ * A card's file name records its style — `<slug>-<hash>.<style>[.page].html`
+ * — so an `update` re-renders the card in the style it was created with, not
+ * whatever the setting says now. The name, not the file's content, carries
+ * it: the model reads and patches the stored copy (and may `cat` it), so a
+ * marker inside the markup would leak into its `old_str`.
+ */
+const CARD_STYLE_PATTERN = new RegExp(`-[0-9a-f]{8}\\.(${STYLE_IDS.join('|')})(?:\\.page)?\\.html$`, 'u')
+
+/**
+ * The style recorded in a card's file name.
+ * @param path - the `update` path as the model passed it.
+ * @returns the recorded style, or undefined for a name from before styles.
+ */
+function styleOfCardPath(path: string): StyleId | undefined {
+  return CARD_STYLE_PATTERN.exec(path)?.[1] as StyleId | undefined
+}
 
 /** Longest launcher summary kept; the launcher shows one line. */
 const MAX_SUMMARY_CHARS = 200

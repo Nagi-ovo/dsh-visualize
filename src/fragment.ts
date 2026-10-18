@@ -13,6 +13,8 @@
  * @module @nagi-ovo/dsh-visualize/fragment
  */
 
+import { DEFAULT_STYLE, styleIdFrom, type StyleId } from './style.ts'
+
 /**
  * Wire name of the tool, the keyed toolview, and the streaming-preview match.
  * Lives in this pure module so the browser half can import it without pulling
@@ -59,6 +61,12 @@ export interface VisualizeMeta {
   path: string
   /** One-line description a page launcher shows under its title; absent when none was given. */
   summary?: string
+  /**
+   * Card style the card was created under, so replay and the windowed view
+   * keep its look after the setting changes. Absent on cards from before
+   * styles existed, which read as the default.
+   */
+  style: StyleId
 }
 
 /**
@@ -162,7 +170,7 @@ export function visualizeMetaFrom(meta: unknown): VisualizeMeta | undefined {
   const { fragment, title, mode, path, summary } = record
   if (typeof fragment !== 'string' || typeof title !== 'string' || typeof path !== 'string') return undefined
   if (!isVisualizeMode(mode)) return undefined
-  return { kind: 'visualize', fragment, title, mode, path, ...summaryField(summary) }
+  return { kind: 'visualize', fragment, title, mode, path, ...summaryField(summary), style: styleIdFrom(record['style']) }
 }
 
 /**
@@ -251,6 +259,8 @@ function descriptorFromFields(
     mode: mode ?? 'inline',
     path: typeof path === 'string' ? path : '',
     ...summaryField(summary),
+    // The arguments never name a style; the client substitutes its best guess.
+    style: DEFAULT_STYLE,
   }
 }
 

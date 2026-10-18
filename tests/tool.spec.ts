@@ -39,7 +39,7 @@ describe('visualizeTool sandbox policy', () => {
     expect(calls.resolveRequest).toEqual({ session })
     expect(calls.resolveCwd).toBe('/work/session')
     expect(calls.writePolicy).toBe(policy)
-    expect((value as { path: string }).path).toMatch(/^\/work\/session\/viz\/lab-[0-9a-f]{8}\.html$/)
+    expect((value as { path: string }).path).toMatch(/^\/work\/session\/viz\/lab-[0-9a-f]{8}\.whale\.html$/)
   })
 
   it('patches the workspace copy on update and writes the result beside it', async () => {

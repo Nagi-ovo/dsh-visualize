@@ -15,6 +15,8 @@
  */
 
 import { FRAME_CSS, PAGE_CSS } from './frame-css.ts'
+import { DEFAULT_STYLE, STYLES, type StyleId } from './style.ts'
+import { vizHelperScript } from './viz-helper.ts'
 
 /** CDN origins a fragment may load static resources from. */
 export const RESOURCE_ORIGINS = [
@@ -77,6 +79,12 @@ export interface FrameDocOptions {
    * The CSP and the height reporter are the same for both.
    */
   variant?: FrameVariant
+  /**
+   * Card style (style.ts) whose tokens, webfont and scoped CSS the frame
+   * takes; its token values win over the bridged host palette. Defaults to
+   * `whale`, which adds nothing to the host bridge. Applies to both variants.
+   */
+  style?: StyleId
 }
 
 /** Surface a frame document is laid out for. */
@@ -84,11 +92,12 @@ export type FrameVariant = 'card' | 'page'
 
 /**
  * Assemble the complete srcdoc document for one visualization frame.
- * @param options - fragment, title, bridged palette, report token, and surface variant.
+ * @param options - fragment, title, bridged palette, report token, surface variant, and card style.
  * @returns the HTML document string for the iframe's `srcDoc`.
  */
 export function buildFrameDoc(options: FrameDocOptions): string {
-  const rootVars = Object.entries(options.themeVars)
+  const style = STYLES[options.style ?? DEFAULT_STYLE] ?? STYLES[DEFAULT_STYLE]
+  const rootVars = Object.entries({ ...options.themeVars, ...style.vars })
     .map(([name, value]) => [name, sanitizeCssValue(value)] as const)
     .filter(([, value]) => value.length > 0)
     .map(([name, value]) => `--dsh-viz-${name}: ${value};`)
@@ -101,9 +110,10 @@ export function buildFrameDoc(options: FrameDocOptions): string {
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}">
 <title>${escapeHtml(options.title)}</title>
-<style>${FRAME_CSS}${options.variant === 'page' ? PAGE_CSS : ''}
+${style.fontHref === undefined ? '' : `<link rel="stylesheet" href="${escapeHtml(style.fontHref)}">\n`}<style>${FRAME_CSS}${options.variant === 'page' ? PAGE_CSS : ''}
 :root { ${rootVars} color-scheme: ${options.colorScheme}; }
-${options.variant === 'page' ? '' : 'body { padding: 4px 2px; }'}</style>
+${options.variant === 'page' ? '' : 'body { padding: 4px 2px; }'}${style.extraCss === undefined ? '' : `\n${style.extraCss}`}</style>
+<script>${vizHelperScript(style.id, style.chart)}</script>
 </head>
 <body>
 ${options.fragment}
