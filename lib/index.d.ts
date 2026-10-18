@@ -30,6 +30,25 @@ import { Context } from "@deepseek-ai/cordis";
 declare const STYLE_IDS: readonly ["whale", "editorial", "paper", "sketch", "terminal"];
 /** One built-in style id. */
 type StyleId = typeof STYLE_IDS[number];
+/**
+ * Path of the node half's style-file route on the host's `/api` channel,
+ * which the settings page calls (style-files.ts).
+ */
+declare const STYLE_FILES_PATH = "/api/dsh-visualize/style-files";
+//#endregion
+//#region src/style-setting.d.ts
+/** A live setting: the value read through its owner's reference. */
+interface LiveValue<T> {
+  get(): T;
+}
+/** The configured style as `apply` receives it. */
+type StyleSetting = StyleId | LiveValue<StyleId | undefined>;
+/**
+ * Read the configured style now.
+ * @param setting - the `style` value `apply` received.
+ * @returns a known style id; anything else reads as the default.
+ */
+declare function readStyle(setting: StyleSetting | undefined): StyleId;
 //#endregion
 //#region src/fragment.d.ts
 /**
@@ -101,17 +120,20 @@ interface Config {
   /**
    * Card style for new cards: colours, fonts and chart defaults the frame
    * applies, plus a style guide appended to the skill. Each card keeps the
-   * style it was created with.
+   * style it was created with. The field is volatile, so the host's settings
+   * form can change it while the plugin runs: read it with
+   * {@link readStyle}, never once at startup.
    */
-  style: StyleId;
+  style: StyleSetting;
 }
 /** Schemastery configuration validated by the Loader. */
 declare const Config: z<Config>;
 /**
- * Register the tool and the bundled skill provider.
+ * Register the tool, the bundled skill provider, the page config, and the
+ * style-file route of the settings page.
  * @param ctx - registrant context.
  * @param config - validated deployment configuration.
  */
 declare function apply(ctx: Context, config: Config): void;
 //#endregion
-export { Config, STYLE_IDS, type StyleId, VISUALIZE_TOOL_NAME, type VisualizeMeta, type VisualizeMode, apply, inject, name, validateFragment, visualizeMetaFrom };
+export { Config, STYLE_FILES_PATH, STYLE_IDS, type StyleId, type StyleSetting, VISUALIZE_TOOL_NAME, type VisualizeMeta, type VisualizeMode, apply, inject, name, readStyle, validateFragment, visualizeMetaFrom };

@@ -14,12 +14,16 @@ import z from '@deepseek-ai/schemastery'
 import { visualizeTool } from './tool.ts'
 import { visualizeSkillProvider } from './skill.ts'
 import { styleFileLocations } from './style-guide.ts'
-import { DEFAULT_STYLE, PAGE_CONFIG_GLOBAL, STYLE_IDS, STYLES, type StyleId } from './style.ts'
+import { PAGE_CONFIG_GLOBAL, STYLE_FILES_PATH, type StyleId } from './style.ts'
+import { readStyle, styleFieldSchema, type StyleSetting } from './style-setting.ts'
+import { handleStyleFiles, styleFilesHost } from './style-files.ts'
 
 export { VISUALIZE_TOOL_NAME } from './tool.ts'
 export { visualizeMetaFrom, type VisualizeMeta, type VisualizeMode } from './fragment.ts'
 export { validateFragment } from './lint.ts'
 export { STYLE_IDS, type StyleId } from './style.ts'
+export { readStyle, type StyleSetting } from './style-setting.ts'
+export { STYLE_FILES_PATH } from './style.ts'
 
 /** Cordis plugin name. */
 export const name = 'dsh-visualize'
@@ -37,29 +41,42 @@ export interface Config {
   /**
    * Card style for new cards: colours, fonts and chart defaults the frame
    * applies, plus a style guide appended to the skill. Each card keeps the
-   * style it was created with.
+   * style it was created with. The field is volatile, so the host's settings
+   * form can change it while the plugin runs: read it with
+   * {@link readStyle}, never once at startup.
    */
-  style: StyleId
+  style: StyleSetting
 }
 
 /** Schemastery configuration validated by the Loader. */
 export const Config: z<Config> = z.object({
   maxFragmentBytes: z.natural().default(1_000_000),
-  style: z.union(STYLE_IDS.map(id => z.const(id).description(STYLES[id].label)))
-    .default(DEFAULT_STYLE)
-    .description('Card style · 卡片风格'),
-})
+  style: styleFieldSchema(),
+}) as unknown as z<Config>
 
 /**
- * Register the tool and the bundled skill provider.
+ * Register the tool, the bundled skill provider, the page config, and the
+ * style-file route of the settings page.
  * @param ctx - registrant context.
  * @param config - validated deployment configuration.
  */
 export function apply(ctx: Context, config: Config): void {
-  const style = config.style ?? DEFAULT_STYLE
-  ctx.tools.register(visualizeTool(ctx, config.maxFragmentBytes, style))
+  const style = () => readStyle(config.style)
+  // The tool's description names the style, so it is rebuilt when the
+  // setting changes; calls already read the style per call.
+  let toolStyle = style()
+  let disposeTool = ctx.tools.register(visualizeTool(ctx, config.maxFragmentBytes, style))
+  const events = ctx as unknown as { on(name: 'loader/volatile-update', listener: () => void): unknown }
+  events.on('loader/volatile-update', () => {
+    if (style() === toolStyle) return
+    disposeTool()
+    toolStyle = style()
+    disposeTool = ctx.tools.register(visualizeTool(ctx, config.maxFragmentBytes, style))
+  })
   ctx.skills.registerProvider(() => visualizeSkillProvider(style, cwd => styleFileLocations(ctx, cwd)))
   injectPageConfig(ctx, style)
+  registerStyleFiles(ctx)
+  declineGeneratedSettingsPage(ctx)
 }
 
 /** The structured index row this plugin contributes (see `@deepseek-ai/dsh-host-webserver`). */
@@ -73,16 +90,64 @@ interface GlobalRow {
  * Tell the browser half the configured style through the web server's index
  * injection table (dsh 0.1.1+): a card still streaming has no persisted meta
  * yet, and nothing else in the tool call carries server data before it
- * settles. The page reads the value when it loads, so a changed setting
- * reaches open pages on their next reload. Hosts without a web server never
- * emit the event, and the listener is inert there.
+ * settles. Each page render reads the setting then, so a reload picks up a
+ * change; the settings page also updates the value on its own page when it
+ * saves. Hosts without a web server never emit the event, and the listener is
+ * inert there.
  * @param ctx - registrant context.
- * @param style - the configured card style.
+ * @param style - reads the configured card style.
  */
-function injectPageConfig(ctx: Context, style: StyleId): void {
+function injectPageConfig(ctx: Context, style: () => StyleId): void {
   // The event is declared by the host web server, which this package does not depend on.
   const events = ctx as unknown as { on(name: 'webserver/index-inject', listener: (table: GlobalRow[]) => void): unknown }
   events.on('webserver/index-inject', (table) => {
-    table.push({ kind: 'global', name: PAGE_CONFIG_GLOBAL, value: { style } })
+    table.push({ kind: 'global', name: PAGE_CONFIG_GLOBAL, value: { style: style() } })
+  })
+}
+
+/** The exact-route registry on the host's authenticated `/api` channel (dsh 0.1.7+). */
+interface ConnectionFetch {
+  register(route: {
+    path: string
+    methods: readonly ('GET' | 'HEAD' | 'POST')[]
+    requestBody: 'buffered' | 'streaming'
+    fetch: (request: Request) => Promise<Response>
+  }): () => unknown
+}
+
+/**
+ * Serve the settings page's style-file editor on the host's `/api` channel,
+ * which authenticates the browser and checks Host/Origin before the route
+ * runs. Optional: a host without the channel, or with an older connection
+ * service, simply has no editor, and the page says where the files are.
+ * @param ctx - registrant context.
+ */
+function registerStyleFiles(ctx: Context): void {
+  const host = styleFilesHost(ctx)
+  ctx.inject(['connection'], (scope) => {
+    const fetch = (scope.get('connection') as { fetch?: Partial<ConnectionFetch> } | undefined)?.fetch
+    if (typeof fetch?.register !== 'function') return
+    const register = fetch.register.bind(fetch) as ConnectionFetch['register']
+    scope.effect(() => register({
+      path: STYLE_FILES_PATH,
+      methods: ['GET', 'POST'],
+      requestBody: 'buffered',
+      fetch: async request => await handleStyleFiles(host, request),
+    }), 'dsh-visualize: style files route')
+  })
+}
+
+/**
+ * Tell the host's settings service that this plugin ships its own page for
+ * its volatile field, so a client that generates forms from schemas does not
+ * add a second one. Optional, like the service.
+ * @param ctx - registrant context.
+ */
+function declineGeneratedSettingsPage(ctx: Context): void {
+  ctx.inject(['settings'], (scope) => {
+    const settings = scope.get('settings') as { configure?: (policy: { auto: boolean }, owner: unknown) => () => void } | undefined
+    if (typeof settings?.configure !== 'function') return
+    const configure = settings.configure.bind(settings)
+    scope.effect(() => configure({ auto: false }, ctx.fiber), 'dsh-visualize: settings page policy')
   })
 }

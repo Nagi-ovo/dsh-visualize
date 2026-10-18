@@ -45,7 +45,19 @@ By default DSH folds a finished turn's tool process. While it does, the turn's c
 
 ## Card styles
 
-The plugin ships five card styles. Pick one with `style` under Settings → Plugins → dsh-visualize in DSH (or in your profile config); the default is `whale`:
+The plugin ships five card styles; the default is `whale`. In DSH, open **More** (bottom left) → **Settings** → **Visualize**: each style shows a live preview card rendered in the current light or dark theme, and one click saves it. The next card uses it, without a restart.
+
+The page needs DSH 0.1.7 or later (the host's settings forms, `configForms`, and its `/api` routes; in 0.1.7, Settings sits at the bottom of the sidebar). Earlier versions either lack the page or show only the snippet below; add this to `<DSH_HOME>/profiles/web/cordis.patch.yml` (`~/.dsh/profiles/web/cordis.patch.yml` by default) instead:
+
+```yaml
+- id: dsh-visualize
+  name: "@nagi-ovo/dsh-visualize"
+  config:
+    style: sketch
+```
+
+The settings page writes the same entry: it goes through the host's dsh-settings into that `cordis.patch.yml`, keeping the file's other entries and comments.
+
 
 | `style` | Look | Good for |
 | --- | --- | --- |
@@ -57,7 +69,7 @@ The plugin ships five card styles. Pick one with `style` under Settings → Plug
 
 A style has two layers. The card shell injects the colours, fonts, radius and chart defaults (grid, axis lines, line width), each tuned for both light and dark themes, with the background left transparent. The layout and writing conventions (how titles read, captions, rough.js) are a short guide appended to the skill for the model. That guide replaces only the taste advice in `design.md`: fragment rules, the CSP, theme variables, the 11px floor and lint still apply. Product UI mockups ignore the style and follow the product being drawn.
 
-Each card records the style it was created with in its persisted result and in its saved copy's file name, so changing the setting later leaves existing cards alone, on replay, in "Open in new window", and when the model patches one with `update`. Cards saved before styles existed have no style in their name, and an `update` re-renders them in the current setting. The preview that renders while the model is still writing a card reads the setting when the DSH page loads, so reload open pages after changing it. `editorial`, `paper`, `sketch` and `terminal` load their fonts from Google Fonts; `paper` loads KaTeX only when a card contains formulas.
+Each card records the style it was created with in its persisted result and in its saved copy's file name, so changing the setting later leaves existing cards alone, on replay, in "Open in new window", and when the model patches one with `update`. Cards saved before styles existed have no style in their name, and an `update` re-renders them in the current setting. The preview that renders while the model is still writing a card reads the setting when the DSH page loads; switching on the settings page updates the current page too, and after editing the YAML by hand, reload open pages. `editorial`, `paper`, `sketch` and `terminal` load their fonts from Google Fonts; `paper` loads KaTeX only when a card contains formulas.
 
 ### Custom styles
 
@@ -65,6 +77,8 @@ Write your preferences in plain language in a Markdown file, e.g. "dark green ac
 
 - Global: `~/.dsh/visualize/style.md` (`$DSH_HOME/visualize/style.md` when `DSH_HOME` is set), for every session.
 - Workspace: `<workspace>/.dsh/visualize-style.md`, for sessions in that workspace only.
+
+Both files can also be viewed and edited at the bottom of **Settings → Visualize** (also DSH 0.1.7+), one per workspace; saving an empty file deletes it.
 
 When they conflict, what you say in the conversation wins, then the workspace file, then the global file, then the built-in style. Only the first 4 KB of each file is read, and a missing file is skipped. Edits apply the next time the model loads the visualize skill (usually the first card of a new session). A custom style changes how the model writes cards, not the colours and fonts the shell injects; to change colours, say so in the file and the model overrides the matching theme variables on the card's root element.
 

@@ -15,5 +15,5 @@
     "noEmit": true
   },
   "include": ["src", "tests"],
-  "exclude": ["src/client", "tests/client.spec.ts", "tests/turn-cards.spec.tsx", "tests/streaming-preview.spec.ts", "tests/stream-assembly.spec.ts", "tests/window-doc.spec.ts", "tests/page-launcher.spec.tsx", "tests/frame-scheme.spec.tsx", "tests/live-style.spec.tsx"]
+  "exclude": ["src/client", "tests/client.spec.ts", "tests/turn-cards.spec.tsx", "tests/streaming-preview.spec.ts", "tests/stream-assembly.spec.ts", "tests/window-doc.spec.ts", "tests/page-launcher.spec.tsx", "tests/frame-scheme.spec.tsx", "tests/live-style.spec.tsx", "tests/settings-section.spec.tsx"]
 }

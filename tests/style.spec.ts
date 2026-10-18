@@ -165,6 +165,7 @@ describe('page style config', () => {
       tools: { register() {} },
       skills: { registerProvider() {} },
       on: (name: string, listener: (table: unknown[]) => void) => listeners.set(name, listener),
+      inject: () => {},
     } as unknown as Context
     apply(ctx, { maxFragmentBytes: 1000, style: 'sketch' })
     const table: unknown[] = []

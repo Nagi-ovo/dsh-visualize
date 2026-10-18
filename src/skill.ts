@@ -54,13 +54,14 @@ const CANDIDATE: SkillCandidate = {
 
 /**
  * Build the bundled provider registered on `ctx.skills`.
- * @param style - the configured card style.
+ * @param style - the configured card style: an id, or a reader asked on
+ *   every load so a changed setting reaches the next load.
  * @param locate - where the user's style files are for a lookup's workspace
  *   (`cwd`; absent when the lookup has no session, which reads the global file alone).
  * @returns the provider.
  */
 export function visualizeSkillProvider(
-  style: StyleId = DEFAULT_STYLE,
+  style: StyleId | (() => StyleId) = DEFAULT_STYLE,
   locate: (cwd: string | undefined) => StyleFileLocations = () => ({}),
 ): SkillProvider {
   return {
@@ -75,7 +76,7 @@ export function visualizeSkillProvider(
         provider: CANDIDATE.provider,
         source: CANDIDATE.source,
         resourceBase: RESOURCE_BASE,
-        content: body + await activeStyleSection(style, locate(options?.cwd)),
+        content: body + await activeStyleSection(typeof style === 'function' ? style() : style, locate(options?.cwd)),
       }
     },
   }

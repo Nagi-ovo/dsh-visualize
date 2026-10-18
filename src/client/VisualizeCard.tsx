@@ -175,7 +175,7 @@ function firstResultLine(content: readonly { type: string; text?: string }[]): s
  * appearance, so each frame document re-resolves the bridged palette.
  * @returns a counter that changes on every theme change.
  */
-function useThemeTick(): number {
+export function useThemeTick(): number {
   const [themeTick, setThemeTick] = useState(0)
   useEffect(() => {
     const bump = () => setThemeTick(tick => tick + 1)

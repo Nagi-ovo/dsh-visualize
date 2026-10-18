@@ -56,14 +56,22 @@ const DESCRIPTION =
  * Build the `visualize` tool definition over the composed filesystem seam.
  * @param ctx - registrant context carrying `ctx.fs` and the host home path for the card copy.
  * @param maxFragmentBytes - deployment size ceiling for one fragment.
- * @param style - configured card style, recorded in each new card's meta.
+ * @param style - configured card style, recorded in each new card's meta: an
+ *   id, or a reader the tool asks on every call so a changed setting applies
+ *   to the next card. The description names the style read when the
+ *   definition is built; the plugin rebuilds it when the setting changes.
  * @returns the tool definition to register on `ctx.tools`.
  */
-export function visualizeTool(ctx: Context, maxFragmentBytes: number, style: StyleId = DEFAULT_STYLE): ToolDefinition {
+export function visualizeTool(
+  ctx: Context,
+  maxFragmentBytes: number,
+  style: StyleId | (() => StyleId) = DEFAULT_STYLE,
+): ToolDefinition {
   const lint = new FragmentLintGate()
+  const currentStyle = typeof style === 'function' ? style : () => style
   return defineTool({
     name: VISUALIZE_TOOL_NAME,
-    description: DESCRIPTION + styleToolNote(style),
+    description: DESCRIPTION + styleToolNote(currentStyle()),
     parameters: {
       action: {
         type: 'string',
@@ -194,7 +202,8 @@ export function visualizeTool(ctx: Context, maxFragmentBytes: number, style: Sty
       // so re-rendering identical bytes in the same style reuses its name. An
       // update keeps the style its card was created with, which that name
       // records; a legacy name without one takes the current setting.
-      const cardStyle = action === 'update' ? styleOfCardPath(args.path!) ?? style : style
+      const configured = currentStyle()
+      const cardStyle = action === 'update' ? styleOfCardPath(args.path!) ?? configured : configured
       const suffix = mode === 'page' ? PAGE_SUFFIX : '.html'
       const target = source ?? await store.create(`${slugOf(title)}-${contentHash(fragment)}.${cardStyle}${suffix}`)
       await target.write(fragment)

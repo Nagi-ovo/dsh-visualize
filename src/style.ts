@@ -213,6 +213,12 @@ export const STYLES: Readonly<Record<StyleId, StylePreset>> = {
 export const PAGE_CONFIG_GLOBAL = '__DSH_VISUALIZE_CONFIG__'
 
 /**
+ * Path of the node half's style-file route on the host's `/api` channel,
+ * which the settings page calls (style-files.ts).
+ */
+export const STYLE_FILES_PATH = '/api/dsh-visualize/style-files'
+
+/**
  * Narrow a persisted or configured value to a style id. Wire data may come
  * from an older card (no style) or a newer build (an id this one lacks); both
  * render in the default rather than declining the card.

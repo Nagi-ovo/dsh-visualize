@@ -18,6 +18,7 @@ import { VisualizeCard } from './VisualizeCard.tsx'
 import { StreamingPreview, streamDefinition } from './StreamingPreview.tsx'
 import { foldingSource, type FoldingHost } from './folding.ts'
 import { selectTurnCards, turnCardsDefinition, TurnCards } from './TurnCards.tsx'
+import { registerSettingsSection } from './settings.tsx'
 
 export const name = 'dsh-visualize'
 
@@ -62,7 +63,7 @@ function turnTailOptions(host: FoldingHost) {
 
 /**
  * Register the keyed toolview, the dock preview with its stream Definition,
- * and the turn-tail cards. Waiting on each hole's declaration mirrors the
+ * the turn-tail cards, and the settings page. Waiting on each hole's declaration mirrors the
  * official registrants: entry application order is loader-driven, and a
  * direct register racing the declaration fails boot.
  * @param ctx - client root context.
@@ -95,4 +96,6 @@ export function apply(ctx: ClientContext): void {
       disposeDefinition()
     }
   })
+  // 设置 → 可视化: the card style picker and the user's style files.
+  registerSettingsSection(ctx)
 }
