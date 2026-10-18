@@ -2,7 +2,7 @@
   "name": "@nagi-ovo/dsh-visualize",
   "description": "DSH inline visualization plugin: a visualize tool + bundled skill let the model render interactive HTML fragments as sandboxed cards in the conversation (Codex /visualize semantics).",
   "icon": "assets/icon.svg",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
