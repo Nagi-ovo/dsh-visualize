@@ -299,11 +299,15 @@ function Preview({ argsRaw }: { argsRaw: string }) {
   // The shell loads ONCE per streaming call; updates flow over postMessage
   // and sync incrementally, so unchanged components persist and new ones
   // float in instead of the whole frame reloading per flush.
-  const doc = useMemo(() => buildStreamShellDoc({
-    ...resolveTheme(),
-    reportToken: 'streaming-preview',
-    style: liveStyle(),
-  }), [])
+  // The iframe takes the scheme baked into the shell: a mismatch makes the
+  // browser paint an opaque canvas behind the transparent preview.
+  const { doc, colorScheme } = useMemo(() => {
+    const theme = resolveTheme()
+    return {
+      doc: buildStreamShellDoc({ ...theme, reportToken: 'streaming-preview', style: liveStyle() }),
+      colorScheme: theme.colorScheme,
+    }
+  }, [])
   useEffect(() => {
     if (!loaded || !hasContent) return
     frameRef.current?.contentWindow?.postMessage({
@@ -323,7 +327,7 @@ function Preview({ argsRaw }: { argsRaw: string }) {
         referrerPolicy="no-referrer"
         title="Visualization streaming preview"
         srcDoc={doc}
-        style={{ ...frameStyle, height: hasContent ? Math.min(contentHeight, PREVIEW_MAX_HEIGHT) : 0 }}
+        style={{ ...frameStyle, colorScheme, height: hasContent ? Math.min(contentHeight, PREVIEW_MAX_HEIGHT) : 0 }}
         onLoad={() => setLoaded(true)}
       />
     </div>

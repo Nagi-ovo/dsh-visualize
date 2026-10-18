@@ -157,7 +157,6 @@ const frameStyle: CSSProperties = {
   width: '100%',
   border: 0,
   background: 'transparent',
-  colorScheme: 'normal',
 }
 
 /** First text line of the durable result content, for the error row. */
@@ -195,20 +194,37 @@ function useThemeTick(): number {
   return themeTick
 }
 
+/** One built frame document and the scheme baked into it. */
+interface FrameDoc {
+  doc: string
+  /**
+   * The `color-scheme` the document's root declares. The iframe element must
+   * use the same one: where the two differ, the browser paints an opaque
+   * canvas behind the document instead of letting the card's transparent
+   * background show the chat surface (a near-black slab in dark mode).
+   * Chrome reads a sandboxed (out-of-process) frame's scheme when the element
+   * loads, and misses a change that lands together with a new `srcdoc`, so
+   * the frames key on it: a theme switch mounts a fresh iframe, which reloads
+   * just as the new `srcdoc` alone would.
+   */
+  colorScheme: 'light' | 'dark'
+}
+
 /**
  * The frame document for one card, rebuilt on theme changes.
  * @param meta - the card.
  * @param reportToken - height-report correlation token.
  * @param variant - surface the document lays out for.
- * @returns the srcdoc string.
+ * @returns the srcdoc string and its scheme, for the iframe's own `color-scheme`.
  */
-function useFrameDoc(meta: VisualizeMeta, reportToken: string, variant: FrameVariant): string {
+function useFrameDoc(meta: VisualizeMeta, reportToken: string, variant: FrameVariant): FrameDoc {
   const themeTick = useThemeTick()
   return useMemo(() => {
     const { themeVars, colorScheme } = resolveTheme()
-    return buildFrameDoc({
+    const doc = buildFrameDoc({
       fragment: meta.fragment, title: meta.title, themeVars, colorScheme, reportToken, variant, style: meta.style,
     })
+    return { doc, colorScheme }
     // themeTick is the deliberate re-resolution trigger for the palette read.
   }, [meta, reportToken, variant, themeTick])
 }
@@ -228,14 +244,15 @@ function SizedFrame({ meta, callId }: { meta: VisualizeMeta; callId: string }) {
     addEventListener('message', onMessage)
     return () => removeEventListener('message', onMessage)
   }, [callId, meta.mode])
-  const doc = useFrameDoc(meta, callId, variantOf(meta))
+  const { doc, colorScheme } = useFrameDoc(meta, callId, variantOf(meta))
   return (
     <iframe
+      key={colorScheme}
       sandbox={FRAME_SANDBOX}
       referrerPolicy="no-referrer"
       title={meta.title}
       srcDoc={doc}
-      style={{ ...frameStyle, height }}
+      style={{ ...frameStyle, height, colorScheme }}
     />
   )
 }
@@ -365,11 +382,12 @@ function PageThumbnail({ meta, callId, onOpen }: { meta: VisualizeMeta; callId: 
     return () => observer.disconnect()
   }, [])
   // A distinct token: its height reports must never size another frame.
-  const doc = useFrameDoc(meta, `thumb:${callId}`, 'page')
+  const { doc, colorScheme } = useFrameDoc(meta, `thumb:${callId}`, 'page')
   const scale = width > 0 ? width / THUMB_VIEWPORT_WIDTH : 0.5
   return (
     <div ref={wrapRef} style={thumbStyle} aria-hidden="true" onClick={onOpen}>
       <iframe
+        key={colorScheme}
         sandbox={FRAME_SANDBOX}
         referrerPolicy="no-referrer"
         title={meta.title}
@@ -386,7 +404,7 @@ function PageThumbnail({ meta, callId, onOpen }: { meta: VisualizeMeta; callId: 
           transform: `scale(${scale})`,
           transformOrigin: '0 0',
           pointerEvents: 'none',
-          colorScheme: 'normal',
+          colorScheme,
         }}
       />
     </div>

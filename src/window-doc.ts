@@ -57,7 +57,7 @@ export function buildWindowDoc(options: WindowDocOptions): string {
 <style>
 :root { color-scheme: ${options.colorScheme}; background: ${background}; }
 html, body { margin: 0; height: 100%; }
-iframe { display: block; box-sizing: border-box; width: 100%; height: 100%; border: 0; padding: ${inset}; background: transparent; }
+iframe { display: block; box-sizing: border-box; width: 100%; height: 100%; border: 0; padding: ${inset}; background: transparent; color-scheme: ${options.colorScheme}; }
 </style>
 </head>
 <body><iframe sandbox="${FRAME_SANDBOX}" referrerpolicy="no-referrer" title="${escapeHtml(options.title)}" srcdoc="${escapeHtml(options.frameDoc)}"></iframe></body>
