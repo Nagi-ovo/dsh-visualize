@@ -142,7 +142,7 @@ svg text { fill: var(--foreground); font-size: var(--font-size-small); }
 }
 .form-check { display: flex; align-items: center; gap: 6px; }
 .form-check input { accent-color: var(--primary); }
-input[type='range'] { accent-color: var(--primary); }
+input[type='range'] { accent-color: var(--primary); margin: 0; }
 
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--border); }

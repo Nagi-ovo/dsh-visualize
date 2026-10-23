@@ -35,6 +35,13 @@ describe('buildFrameDoc', () => {
     expect(doc).toContain('"call-1"')
     expect(doc).toContain('ResizeObserver')
   })
+
+  it('clears the browser margin on range inputs', () => {
+    // A range keeps the UA's 2px margin. Under `width: 100%` (the sheet's own
+    // controls) it then overflowed its column by 4px, which added a horizontal
+    // scrollbar, stole 15px of height, and brought on a vertical one.
+    expect(doc).toContain("input[type='range'] { accent-color: var(--primary); margin: 0; }")
+  })
 })
 
 describe('sanitizeCssValue', () => {
