@@ -8,8 +8,10 @@
  * untrusted: the message must come from this card's own frame window (the
  * token alone is readable by the fragment), while the reader is interacting
  * with that frame (so a card cannot fill the draft on load), within the
- * length and rate limits, and into an empty, idle composer — `setDraft` replaces the whole draft, chips included, so a draft
- * the reader is writing is never overwritten.
+ * length and rate limits, and into an idle composer that is empty or still
+ * holds exactly the text a card put there last — `setDraft` replaces the
+ * whole draft, chips included, so a draft the reader wrote or edited is never
+ * overwritten, while a reader who changes their pick just replaces it.
  *
  * Host surface (dsh 0.1.7+): `sessions.scope(id).get('conversation').input
  * .for(scope)` yields the session's input facade (`setDraft`, `focus`,
@@ -23,8 +25,11 @@ import { PROMPT_MESSAGE_TYPE } from '../shell.ts'
 /** Longest prompt text accepted, in UTF-16 code units. */
 export const PROMPT_MAX_CHARS = 2000
 
-/** Minimum gap between two accepted prompts from one frame. */
-export const PROMPT_INTERVAL_MS = 1000
+/**
+ * Minimum gap between two accepted prompts from one frame: enough to drop a
+ * double click, short enough that a reader changing their pick is not lost.
+ */
+export const PROMPT_INTERVAL_MS = 300
 
 /** What became of one prompt request. */
 export type PromptOutcome =
@@ -83,15 +88,18 @@ export function readerIsInFrame(frame: HTMLIFrameElement): boolean {
 }
 
 /**
- * Put prompt text into the composer when it is idle and empty.
+ * Put prompt text into the composer when it is idle and holds nothing of the
+ * reader's own: empty, or exactly what a card drafted there last.
  * @param input - the session's input facade.
  * @param text - cleaned prompt text.
+ * @param carded - the text a card last drafted in this session, if any.
  * @returns the outcome.
  */
-export function draftPrompt(input: ComposerInput, text: string): PromptOutcome {
+export function draftPrompt(input: ComposerInput, text: string, carded?: string): PromptOutcome {
   const state = input.state?.getSnapshot()
   if (state?.phase !== undefined && state.phase !== 'plain') return 'busy'
-  if (state?.draft !== undefined && state.draft.trim() !== '') {
+  const draft = state?.draft?.trim() ?? ''
+  if (draft !== '' && draft !== carded) {
     input.notify?.('info', keptDraftNotice())
     return 'kept-draft'
   }
@@ -147,9 +155,18 @@ export function promptSinkFor(host: SessionsHost, sessionId: unknown): PromptSin
   }
   return (text) => {
     const input = composerFor(host, sessionId)
-    return input === undefined ? 'unavailable' : draftPrompt(input, text)
+    if (input === undefined) return 'unavailable'
+    const outcome = draftPrompt(input, text, cardDrafts.get(sessionId))
+    if (outcome === 'drafted') cardDrafts.set(sessionId, text)
+    return outcome
   }
 }
+
+/**
+ * The text a card last put into each session's composer. A draft still equal
+ * to it is the card's, not the reader's, so a new pick may replace it.
+ */
+const cardDrafts = new Map<string, string>()
 
 /** Notice shown when a card's prompt meets a draft the reader is writing. */
 function keptDraftNotice(): string {

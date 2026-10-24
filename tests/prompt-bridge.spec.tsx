@@ -76,6 +76,11 @@ describe('draftPrompt', () => {
     expect(calls[0]).toMatch(/^notify:info:/u)
   })
 
+  it('replaces the text a card drafted, but not once the reader edited it', () => {
+    expect(draftPrompt(composer('我选了 B').input, '我选了 A', '我选了 B')).toBe('drafted')
+    expect(draftPrompt(composer('我选了 B，还有').input, '我选了 A', '我选了 B')).toBe('kept-draft')
+  })
+
   it('leaves a composer mid-submission alone', () => {
     const { input, calls } = composer('', 'submitting')
     expect(draftPrompt(input, 'hi')).toBe('busy')
@@ -103,6 +108,21 @@ describe('promptSinkFor', () => {
     expect(promptSinkFor(host({}), 's1')).toBeUndefined()
     expect(promptSinkFor(host({ input: { for: () => undefined } }), undefined)).toBeUndefined()
     expect(promptSinkFor({ get: () => undefined }, 's1')).toBeUndefined()
+  })
+
+  it('lets a changed pick replace the pick it drafted before', () => {
+    let draft = ''
+    const input: ComposerInput = {
+      setDraft: text => { draft = text },
+      state: { getSnapshot: () => ({ draft, phase: 'plain' }) },
+    }
+    const sink = promptSinkFor(host({ input: { for: () => input } }), 's1')!
+    expect(sink('我选了 B')).toBe('drafted')
+    expect(sink('我选了 A')).toBe('drafted')
+    expect(draft).toBe('我选了 A')
+    draft = '我选了 A，不过'
+    expect(sink('我选了 B')).toBe('kept-draft')
+    expect(draft).toBe('我选了 A，不过')
   })
 
   it('declines once the session is gone', () => {
@@ -223,7 +243,7 @@ describe('card relay', () => {
     const now = vi.spyOn(performance, 'now').mockReturnValue(10_000)
     post(frame.contentWindow, 'one')
     post(frame.contentWindow, 'two')
-    now.mockReturnValue(11_500)
+    now.mockReturnValue(10_400)
     post(frame.contentWindow, 'three')
     expect(sink.mock.calls.map(call => call[0])).toEqual(['one', 'three'])
   })

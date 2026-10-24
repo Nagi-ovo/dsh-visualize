@@ -160,8 +160,10 @@ on this one".
 - Check `dshViz.canPrompt` first. It is false where the card cannot hand text
   back (a card opened in its own tab, an older host); hide or disable the
   prompt-only controls then. The card must stay useful without them.
-- The text only lands in an empty composer. If the user is already typing,
-  it is dropped with a notice, so do not build flows that depend on it.
+- The text lands in an empty composer, or replaces what a card put there
+  before, so a user who changes their pick just gets the new text. If the
+  user has typed or edited the draft, it is kept and a notice explains why;
+  do not build flows that depend on the text landing.
 
 ## Card style
 
