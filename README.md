@@ -43,6 +43,8 @@ dsh plugin --profile web add @nagi-ovo/dsh-visualize
 
 DSH 默认会把已完成回合的工具过程折叠起来。折叠时，这一轮画出的卡片会再显示在最终回答下方，不用展开过程也能看到；「工作步骤展示」选「完全展开」时则只在原位显示。
 
+卡片可以把内容交回对话。测验、选项、表单这类卡片在你点下按钮后，会把一句话（比如「我选了 B，帮我解释为什么 A 不对」）填进输入框。消息不会自动发出，你可以改完再发，也可以不发。输入框里已经有你在写的草稿时，卡片不会覆盖它，只会弹出一条提示。这项功能需要 DSH 0.1.7 及以上；在新窗口打开的卡片不支持，卡片会隐藏这类按钮。
+
 ## 卡片风格
 
 插件内置 5 种卡片风格，默认是 `whale`。在 DSH 里点左下角「更多」→「设置」→「可视化」，每种风格都有一张按当前明暗主题实时渲染的预览卡，点一下就保存，下一张卡片立即生效，不用重启。
@@ -84,10 +86,10 @@ DSH 默认会把已完成回合的工具过程折叠起来。折叠时，这一�
 
 ## 安全
 
-卡片运行在不透明来源的 sandboxed iframe 中，不能接触宿主页面。在新窗口打开（包括页面模式的「打开页面」）时，新标签页本身不含任何模型代码，fragment 依旧只在同样 sandbox 和 CSP 的 iframe 里运行，读不到 DSH 的 cookie、localStorage 或登录凭据。CSP 会阻止网络请求、嵌套页面和表单提交，只允许从固定 CDN 加载静态资源。单个 fragment 默认上限为 `1000000` 字节，可以通过 `maxFragmentBytes` 调整。
+卡片运行在不透明来源的 sandboxed iframe 中，不能接触宿主页面。在新窗口打开（包括页面模式的「打开页面」）时，新标签页本身不含任何模型代码，fragment 依旧只在同样 sandbox 和 CSP 的 iframe 里运行，读不到 DSH 的 cookie、localStorage 或登录凭据。CSP 会阻止网络请求、嵌套页面和表单提交，只允许从固定 CDN 加载静态资源。单个 fragment 默认上限为 `1000000` 字节，可以通过 `maxFragmentBytes` 调整。卡片往输入框里填内容时，由 DSH 页面这边把关：只接受这张卡片自己的 iframe 发来的、由你的点击触发的请求，限长、限频，只写进空的输入框，并且永远不替你发送。
 
 ## 限制
 
-目前只在 Web UI 中渲染交互卡片，TUI 和 headless 客户端会显示普通工具结果。卡片内的按钮暂时不能向主对话发送 follow-up 消息。
+目前只在 Web UI 中渲染交互卡片，TUI 和 headless 客户端会显示普通工具结果。卡片只能把内容填进输入框，不能直接发送消息。
 
 灵感来自 Codex 桌面端的 `/visualize`；skill 的分层 reference 和 Chart.js 优先路线借鉴了 [himself65/finance-skills](https://github.com/himself65/finance-skills/tree/main/plugins/ui-tools/skills/generative-ui)。

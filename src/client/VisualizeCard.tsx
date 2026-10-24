@@ -24,12 +24,18 @@
  * laid out at desktop width and scaled into the card, and a button that opens
  * the page through the same script-free wrapper. A secondary toggle shows the
  * page in the conversation, for browsers or hosts that will not open a tab.
+ *
+ * Prompts: where the registration injects a {@link PromptSink}, an in-chat
+ * frame's `dshViz.prompt(text)` lands in the composer as a draft, behind the
+ * parent-side gates in prompt-bridge.ts. New-window tabs and thumbnails never
+ * relay prompts.
  */
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import { visualizeMetaFrom, visualizeMetaFromArgs, type VisualizeMeta } from '../fragment.ts'
 import { buildFrameDoc, HEIGHT_MESSAGE_TYPE, type FrameVariant } from '../shell.ts'
+import { PROMPT_INTERVAL_MS, readerIsInFrame, readPromptMessage, type PromptSink } from './prompt-bridge.ts'
 import { buildWindowDoc, FRAME_SANDBOX } from '../window-doc.ts'
 import { resolveTheme } from './theme.ts'
 import { liveStyle, noteSettledStyle } from './style.ts'
@@ -215,23 +221,55 @@ interface FrameDoc {
  * @param meta - the card.
  * @param reportToken - height-report correlation token.
  * @param variant - surface the document lays out for.
+ * @param promptable - whether the frame's `dshViz.prompt` is relayed.
  * @returns the srcdoc string and its scheme, for the iframe's own `color-scheme`.
  */
-function useFrameDoc(meta: VisualizeMeta, reportToken: string, variant: FrameVariant): FrameDoc {
+function useFrameDoc(meta: VisualizeMeta, reportToken: string, variant: FrameVariant, promptable = false): FrameDoc {
   const themeTick = useThemeTick()
   return useMemo(() => {
     const { themeVars, colorScheme } = resolveTheme()
     const doc = buildFrameDoc({
       fragment: meta.fragment, title: meta.title, themeVars, colorScheme, reportToken, variant, style: meta.style,
+      promptable,
     })
     return { doc, colorScheme }
     // themeTick is the deliberate re-resolution trigger for the palette read.
-  }, [meta, reportToken, variant, themeTick])
+  }, [meta, reportToken, variant, promptable, themeTick])
+}
+
+/**
+ * Relay this frame's `dshViz.prompt` requests into the sink. Only messages
+ * from this very frame window count — the token is readable by the fragment
+ * — and only while the reader is interacting with this frame (see
+ * {@link readerIsInFrame}), at most once per interval.
+ * @param frameRef - the card's iframe.
+ * @param token - the frame's correlation token.
+ * @param prompt - the injected sink, or undefined when prompts are off.
+ */
+function usePromptRelay(frameRef: RefObject<HTMLIFrameElement | null>, token: string, prompt: PromptSink | undefined) {
+  const lastAt = useRef(-Infinity)
+  useEffect(() => {
+    if (prompt === undefined) return
+    const onMessage = (event: MessageEvent) => {
+      const frame = frameRef.current
+      if (frame === null || event.source !== frame.contentWindow) return
+      const text = readPromptMessage(event.data, token)
+      if (text === undefined || !readerIsInFrame(frame)) return
+      const now = performance.now()
+      if (now - lastAt.current < PROMPT_INTERVAL_MS) return
+      lastAt.current = now
+      prompt(text)
+    }
+    addEventListener('message', onMessage)
+    return () => removeEventListener('message', onMessage)
+  }, [frameRef, token, prompt])
 }
 
 /** The sandboxed frame, sized to its content's reported height up to the mode's cap. */
-function SizedFrame({ meta, callId }: { meta: VisualizeMeta; callId: string }) {
+function SizedFrame({ meta, callId, prompt }: { meta: VisualizeMeta; callId: string; prompt?: PromptSink | undefined }) {
   const [height, setHeight] = useState(MIN_HEIGHT)
+  const frameRef = useRef<HTMLIFrameElement | null>(null)
+  usePromptRelay(frameRef, callId, prompt)
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const data: unknown = event.data
@@ -244,9 +282,10 @@ function SizedFrame({ meta, callId }: { meta: VisualizeMeta; callId: string }) {
     addEventListener('message', onMessage)
     return () => removeEventListener('message', onMessage)
   }, [callId, meta.mode])
-  const { doc, colorScheme } = useFrameDoc(meta, callId, variantOf(meta))
+  const { doc, colorScheme } = useFrameDoc(meta, callId, variantOf(meta), prompt !== undefined)
   return (
     <iframe
+      ref={frameRef}
       key={colorScheme}
       sandbox={FRAME_SANDBOX}
       referrerPolicy="no-referrer"
@@ -263,8 +302,8 @@ function SizedFrame({ meta, callId }: { meta: VisualizeMeta; callId: string }) {
  * turn tail, replay — goes through here, so a page card is a launcher in all
  * of them.
  */
-export function Frame({ meta, callId }: { meta: VisualizeMeta; callId: string }) {
-  if (meta.mode === 'page') return <PageLauncher meta={meta} callId={callId} />
+export function Frame({ meta, callId, prompt }: { meta: VisualizeMeta; callId: string; prompt?: PromptSink | undefined }) {
+  if (meta.mode === 'page') return <PageLauncher meta={meta} callId={callId} prompt={prompt} />
   const label = openLabel()
   return (
     <div style={cardStyle}>
@@ -281,7 +320,7 @@ export function Frame({ meta, callId }: { meta: VisualizeMeta; callId: string })
           <OpenIcon />
         </button>
       </div>
-      <SizedFrame meta={meta} callId={callId} />
+      <SizedFrame meta={meta} callId={callId} prompt={prompt} />
     </div>
   )
 }
@@ -417,7 +456,7 @@ function PageThumbnail({ meta, callId, onOpen }: { meta: VisualizeMeta; callId: 
  * tab opened without a user gesture is a blocked popup. Where no tab can be
  * opened at all, the page renders in place as a regular card.
  */
-function PageLauncher({ meta, callId }: { meta: VisualizeMeta; callId: string }) {
+function PageLauncher({ meta, callId, prompt }: { meta: VisualizeMeta; callId: string; prompt: PromptSink | undefined }) {
   const opens = canOpenWindow()
   const [expanded, setExpanded] = useState(!opens)
   const labels = launcherLabels()
@@ -425,7 +464,7 @@ function PageLauncher({ meta, callId }: { meta: VisualizeMeta; callId: string })
   return (
     <div style={launcherStyle} data-visualize-launcher="">
       {expanded
-        ? <SizedFrame meta={meta} callId={callId} />
+        ? <SizedFrame meta={meta} callId={callId} prompt={prompt} />
         : <PageThumbnail meta={meta} callId={callId} onOpen={open} />}
       <div style={launcherBarStyle}>
         <div style={launcherTextStyle} title={meta.path === '' ? meta.title : meta.path}>
@@ -452,9 +491,9 @@ function PageLauncher({ meta, callId }: { meta: VisualizeMeta; callId: string })
  * Keyed toolview for the `visualize` tool. Running calls and malformed or
  * failed results stay quiet single lines; a well-formed persisted meta — or
  * the fragment in the call's own arguments for nested dispatches — mounts
- * the frame.
+ * the frame. Only a settled card relays prompts.
  */
-export function VisualizeCard({ callId, block }: ToolCallViewProps) {
+export function VisualizeCard({ callId, block, visualizePrompt }: ToolCallViewProps & VisualizePromptInjected) {
   // dsh 0.1.7 adds a preparing phase whose block carries no arguments yet.
   const argsRaw = 'kind' in block ? block.call?.argsRaw : 'argsRaw' in block ? block.argsRaw : undefined
   if (!('kind' in block)) {
@@ -474,5 +513,11 @@ export function VisualizeCard({ callId, block }: ToolCallViewProps) {
     // show the durable result text instead of guessing at markup.
     return <div style={headerStyle}>{firstResultLine(block.content)}</div>
   }
-  return <Frame meta={meta} callId={callId} />
+  return <Frame meta={meta} callId={callId} prompt={visualizePrompt} />
+}
+
+/** Props a slot registration injects so cards can reach the session's composer. */
+export interface VisualizePromptInjected {
+  /** Composer sink for this session; absent on hosts without a session input. */
+  visualizePrompt?: PromptSink | undefined
 }

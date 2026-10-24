@@ -143,6 +143,26 @@ retrying.
 - Before finishing, confirm every element your script queries exists, every
   identifier is defined, and the main interaction visibly changes the output.
 
+## Handing back to the conversation
+
+`dshViz.prompt(text)` puts `text` into the chat composer as a draft. The
+user reads it, edits it if they like, and sends it; the card never sends
+anything itself. Use it where the card ends in a choice the conversation
+should act on: a quiz answer, a picked option, a submitted form, "go deeper
+on this one".
+
+- Call it only from a click or submit handler, once per action. Never call it
+  on load, on a timer, or from `input` / `change` / slider events; those
+  calls are dropped.
+- Write `text` as the user speaking, in their language, carrying what the
+  card knows: `我选了 B（O(n log n)），帮我解释为什么 A 不对`, not
+  `button_b_clicked`. Keep it under 2000 characters.
+- Check `dshViz.canPrompt` first. It is false where the card cannot hand text
+  back (a card opened in its own tab, an older host); hide or disable the
+  prompt-only controls then. The card must stay useful without them.
+- The text only lands in an empty composer. If the user is already typing,
+  it is dropped with a notice, so do not build flows that depend on it.
+
 ## Card style
 
 The user picks a card style in the plugin settings. The active one is

@@ -43,6 +43,8 @@ A copy of each card's fragment is saved to `~/.dsh/visualize/sessions/<session i
 
 By default DSH folds a finished turn's tool process. While it does, the turn's cards also appear under the final answer, so you see them without opening the process; with Work details set to Verbose they stay in place only.
 
+Cards can hand something back to the conversation. When you click a button in a quiz, a choice, or a form, the card puts a sentence such as "I picked B — explain why A is wrong" into the composer. Nothing is sent for you: edit it and send it, or don't. If you are already writing a draft, the card leaves it alone and shows a notice instead. This needs DSH 0.1.7 or later and does not work in a card opened in a new window, where the card hides those buttons.
+
 ## Card styles
 
 The plugin ships five card styles; the default is `whale`. In DSH, open **More** (bottom left) → **Settings** → **Visualize**: each style shows a live preview card rendered in the current light or dark theme, and one click saves it. The next card uses it, without a restart.
@@ -84,10 +86,10 @@ When they conflict, what you say in the conversation wins, then the workspace fi
 
 ## Security
 
-Each card runs in a sandboxed iframe with an opaque origin and cannot access the host page. Opening a card in a new window, including a page's **Open page**, keeps that: the new tab carries no model code of its own, and the fragment still runs only inside an iframe with the same sandbox and CSP, so it cannot read DSH's cookies, localStorage, or login token. Its CSP blocks network requests, nested pages, and form submissions, while allowing static assets from a fixed set of CDNs. Fragments are limited to `1000000` bytes by default; change `maxFragmentBytes` to use a different limit.
+Each card runs in a sandboxed iframe with an opaque origin and cannot access the host page. Opening a card in a new window, including a page's **Open page**, keeps that: the new tab carries no model code of its own, and the fragment still runs only inside an iframe with the same sandbox and CSP, so it cannot read DSH's cookies, localStorage, or login token. Its CSP blocks network requests, nested pages, and form submissions, while allowing static assets from a fixed set of CDNs. Fragments are limited to `1000000` bytes by default; change `maxFragmentBytes` to use a different limit. When a card fills the composer, the DSH page does the checking: it accepts the request only from that card's own iframe and only after your click, limits its length and rate, writes only into an empty composer, and never sends on your behalf.
 
 ## Limitations
 
-Interactive cards currently render only in the Web UI. TUI and headless clients show the standard tool result instead. Buttons inside a card cannot yet send follow-up messages to the conversation.
+Interactive cards currently render only in the Web UI. TUI and headless clients show the standard tool result instead. A card can fill the composer but cannot send a message itself.
 
 Inspired by `/visualize` in the Codex desktop app. The layered skill references and Chart.js-first approach draw from [himself65/finance-skills](https://github.com/himself65/finance-skills/tree/main/plugins/ui-tools/skills/generative-ui).

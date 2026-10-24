@@ -13,24 +13,34 @@
  *   (the unicode-range slices `text` needs included) have loaded, or after
  *   2.5s; Chart.js measures labels once, so create charts after it.
  * - `dshViz.color(token, alpha?, root?)` resolves one colour token.
+ * - `dshViz.prompt(text)` asks the card to put `text` into the chat
+ *   composer as a draft the reader sends (never sent by itself); it returns
+ *   false where the card cannot relay it. `dshViz.canPrompt` says up front
+ *   whether it can, so a fragment hides prompt-only controls otherwise.
  *
  * @module @nagi-ovo/dsh-visualize/viz-helper
  */
 
 import type { ChartPreset, StyleId } from './style.ts'
 
+/** Wire type of the frame→card composer prompt (`dshViz.prompt`). */
+export const PROMPT_MESSAGE_TYPE = 'dsh-visualize:prompt'
+
 /**
  * The helper's inline script body for one card style.
  * @param style - the card's style id, exposed as `dshViz.style`.
  * @param chart - the style's Chart.js knobs beyond its CSS tokens.
+ * @param promptToken - correlation token for `dshViz.prompt` messages, or
+ *   undefined where the embedding card relays no prompts.
  * @returns the script body.
  */
-export function vizHelperScript(style: StyleId, chart: ChartPreset): string {
+export function vizHelperScript(style: StyleId, chart: ChartPreset, promptToken?: string): string {
   // JSON of plugin-owned constants; `<` cannot occur, so the script cannot close early.
   return `
 (function () {
   var STYLE = ${JSON.stringify(style)};
   var CHART = ${JSON.stringify(chart)};
+  var PROMPT_TOKEN = ${JSON.stringify(promptToken ?? null)};
   var GENERIC = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-[a-z-]+|-apple-system|emoji|math)$/;
   var paint = null;
   function host(root) { return root || document.body || document.documentElement; }
@@ -155,7 +165,18 @@ export function vizHelperScript(style: StyleId, chart: ChartPreset): string {
     var settled = Promise.all(loads).then(function () { return fonts.ready; });
     return Promise.race([settled, new Promise(function (done) { setTimeout(done, 2500); })]);
   }
-  window.dshViz = { style: STYLE, color: color, chartDefaults: chartDefaults, fontsReady: fontsReady };
+  function prompt(text) {
+    if (PROMPT_TOKEN === null || typeof text !== 'string' || text.trim() === '') return false;
+    // Only from the reader's own gesture in this frame; the card re-checks.
+    var activation = navigator.userActivation;
+    if (activation && activation.isActive === false) return false;
+    parent.postMessage({ type: ${JSON.stringify(PROMPT_MESSAGE_TYPE)}, token: PROMPT_TOKEN, text: text }, '*');
+    return true;
+  }
+  window.dshViz = {
+    style: STYLE, color: color, chartDefaults: chartDefaults, fontsReady: fontsReady,
+    canPrompt: PROMPT_TOKEN !== null, prompt: prompt,
+  };
 })();
 `
 }

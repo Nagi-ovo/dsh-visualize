@@ -53,6 +53,8 @@ export const HEIGHT_MESSAGE_TYPE = 'dsh-visualize:height'
 /** Wire type of the card→frame streaming fragment update message. */
 export const STREAM_MESSAGE_TYPE = 'dsh-visualize:stream'
 
+export { PROMPT_MESSAGE_TYPE } from './viz-helper.ts'
+
 /** Inputs to one frame document assembly. */
 export interface FrameDocOptions {
   /** The validated fragment body. */
@@ -85,6 +87,13 @@ export interface FrameDocOptions {
    * `whale`, which adds nothing to the host bridge. Applies to both variants.
    */
   style?: StyleId
+  /**
+   * Whether the embedding card relays `dshViz.prompt` into the composer: only
+   * a settled in-chat card on a host with a session input does. Tabs opened
+   * with "open in new window", thumbnails and the streaming preview leave it
+   * off, and the frame then reports `dshViz.canPrompt === false`.
+   */
+  promptable?: boolean
 }
 
 /** Surface a frame document is laid out for. */
@@ -113,7 +122,7 @@ export function buildFrameDoc(options: FrameDocOptions): string {
 ${style.fontHref === undefined ? '' : `<link rel="stylesheet" href="${escapeHtml(style.fontHref)}">\n`}<style>${FRAME_CSS}${options.variant === 'page' ? PAGE_CSS : ''}
 :root { ${rootVars} color-scheme: ${options.colorScheme}; }
 ${options.variant === 'page' ? '' : 'body { padding: 4px 2px; }'}${style.extraCss === undefined ? '' : `\n${style.extraCss}`}</style>
-<script>${vizHelperScript(style.id, style.chart)}</script>
+<script>${vizHelperScript(style.id, style.chart, options.promptable === true ? options.reportToken : undefined)}</script>
 </head>
 <body>
 ${options.fragment}

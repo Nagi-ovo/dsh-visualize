@@ -21,7 +21,7 @@ import type { HostObservable, InjectFace, PropsRuntime } from '@deepseek-ai/dsh-
 // Type-only: pulls the `conversation.chat.turnTail` SlotMap declaration.
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import { visualizeMetaFrom, type VisualizeMeta } from '../fragment.ts'
-import { Frame } from './VisualizeCard.tsx'
+import { Frame, type VisualizePromptInjected } from './VisualizeCard.tsx'
 
 /** Definition kind and Turn data key; namespaced by package to stay unique. */
 export const TURN_CARDS_KEY = 'dsh-visualize'
@@ -136,6 +136,7 @@ export function selectTurnCards(owner: { turn?: TurnLocation; seq: number }): re
 
 /** Folding observable injected by the registration. */
 export type TurnCardsInjected = InjectFace<{ readonly hooks: { readonly visualizeFolds: HostObservable<boolean> } }>
+  & VisualizePromptInjected
 
 /** A grid track sized `minmax(0, 1fr)`: an `auto` track would grow to a card's min-content. */
 const listStyle: CSSProperties = {
@@ -153,7 +154,7 @@ const listStyle: CSSProperties = {
  * @param props - turn owner props plus the injected folding selector.
  * @returns the turn's cards, or null.
  */
-export function TurnCards({ turn, seq, useVisualizeFolds }: PropsRuntime<'conversation.chat.turnTail'> & TurnCardsInjected) {
+export function TurnCards({ turn, seq, useVisualizeFolds, visualizePrompt }: PropsRuntime<'conversation.chat.turnTail'> & TurnCardsInjected) {
   const folds = useVisualizeFolds(value => value)
   const cards = cardsBefore(turn, seq)
   if (!folds || cards.length === 0) return null
@@ -162,7 +163,7 @@ export function TurnCards({ turn, seq, useVisualizeFolds }: PropsRuntime<'conver
       {cards.map(card => (
         // A distinct height token: the toolview frame for the same call may be
         // mounted too (an opened fold) and reports under the bare call id.
-        <Frame key={card.callId} meta={card.meta} callId={`turn-tail:${card.callId}`} />
+        <Frame key={card.callId} meta={card.meta} callId={`turn-tail:${card.callId}`} prompt={visualizePrompt} />
       ))}
     </div>
   )

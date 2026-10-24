@@ -19,6 +19,7 @@ import { StreamingPreview, streamDefinition } from './StreamingPreview.tsx'
 import { foldingSource, type FoldingHost } from './folding.ts'
 import { selectTurnCards, turnCardsDefinition, TurnCards } from './TurnCards.tsx'
 import { registerSettingsSection } from './settings.tsx'
+import { promptSinkFor } from './prompt-bridge.ts'
 
 export const name = 'dsh-visualize'
 
@@ -57,7 +58,10 @@ function turnTailOptions(host: FoldingHost) {
     order: 100,
     priority: 100,
     select: selectTurnCards,
-    inject: () => ({ hooks: { visualizeFolds: folds } }),
+    inject: (sessionId: unknown) => ({
+      hooks: { visualizeFolds: folds },
+      visualizePrompt: promptSinkFor(host, sessionId),
+    }),
   } as const
 }
 
@@ -69,8 +73,14 @@ function turnTailOptions(host: FoldingHost) {
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
+  // A session-scope registration's inject receives the session id; the sink
+  // it builds lets a settled card put `dshViz.prompt` text into the composer.
   ctx.slots.inject('tool.call.toolview', () => ctx.slots.register(
-    { name: 'tool.call.toolview', key: 'visualize' },
+    {
+      name: 'tool.call.toolview',
+      key: 'visualize',
+      inject: (sessionId: unknown) => ({ visualizePrompt: promptSinkFor(ctx, sessionId) }),
+    },
     VisualizeCard,
   ))
   // The dock reads the argument stream from Turn data the stream Definition
