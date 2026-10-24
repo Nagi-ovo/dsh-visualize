@@ -138,6 +138,38 @@ describe('visualize with data-viz-src images', () => {
     expect(added.images).toHaveLength(3)
   })
 
+  it('leaves the card untouched when an update is cancelled while its images resolve', async () => {
+    let started: () => void = () => {}
+    const fetching = new Promise<void>(done => {
+      started = done
+    })
+    let hang = true
+    const fetchUrl: UrlFetcher = async (_url, signal) => {
+      if (!hang) return PNG
+      started()
+      return await new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason)))
+    }
+    const tool = visualizeTool(host(), 100_000, 'whale', { delivery: () => true, fetchUrl })
+    const created = await tool.execute({ fragment: '<div id="lab"><h3>Loss</h3></div>', title: 'Lab' }, exec) as Value
+    const manifest = created.path.replace(/\.html$/u, '.images.json')
+    const patch = { action: 'update', path: created.path, title: 'Lab', old_str: '<h3>Loss</h3>', new_str: '<img data-viz-src="https://example.com/a.png"><h3>Loss</h3>' }
+
+    const cancel = new AbortController()
+    const call = tool.execute(patch, { agent: { session: { id: 'sess-1', header: { cwd: '' } } }, signal: cancel.signal } as never)
+    await fetching
+    cancel.abort()
+    await expect(call).rejects.toThrow()
+    expect(await readFile(created.path, 'utf8')).toBe('<div id="lab"><h3>Loss</h3></div>')
+    await expect(stat(manifest)).rejects.toThrow()
+
+    // The same patch, retried, still finds its old_str.
+    hang = false
+    const retried = await tool.execute(patch, exec) as Value
+    expect(retried.fragment).toContain('data-viz-src')
+    expect(retried.images).toHaveLength(1)
+    expect(await readFile(manifest, 'utf8')).toContain('https://example.com/a.png')
+  })
+
   it('renders the card and says why on a host that cannot deliver images', async () => {
     const { run, text } = setup(false)
     const value = await run({ fragment: FRAGMENT, title: 'Lab' })

@@ -147,6 +147,13 @@ describe('embedImages', () => {
     expect(embedImages(untouched, urls)).toBe(untouched)
   })
 
+  it('stops splicing once the expanded size reaches the cap, leaving the rest to placeholders', () => {
+    const fragment = '<img data-viz-src="a.png">'.repeat(5)
+    const out = embedImages(fragment, urls, PNG_URL.length * 2 + 1)
+    expect(out.split(PNG_URL)).toHaveLength(3)
+    expect(out.endsWith('<img data-viz-src="a.png"><img data-viz-src="a.png"><img data-viz-src="a.png">')).toBe(true)
+  })
+
   it('refuses anything but a data URL', () => {
     const hostile = new Map([['a.png', 'javascript:alert(1)'], ['b.png', 'data:image/png;base64,x" onerror="alert(1)']])
     const fragment = '<img data-viz-src="a.png"><img data-viz-src="b.png">'

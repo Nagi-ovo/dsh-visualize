@@ -173,6 +173,19 @@ describe('workspace images', () => {
       .toEqual([{ src: 'second.png', reason: expect.stringMatching(/most one card takes/u) }])
   })
 
+  it('charges an image once per reference, since every reference embeds a full copy', async () => {
+    await writeFile(join(workspace, 'second.png'), JPEG)
+    const limits: ImageLimits = { ...DEFAULT_IMAGE_LIMITS, maxCardBytes: PNG.byteLength * 3 + JPEG.byteLength }
+    const repeated = (n: number) => '<img data-viz-src="figs/loss.png">'.repeat(n) + '<img data-viz-src="second.png">'
+    const fits = await run(repeated(3), { limits })
+    expect(fits.failures).toEqual([])
+    expect(fits.images.map(i => i.src)).toEqual(['figs/loss.png', 'second.png'])
+    // One more reference and the repeated image alone would overrun the card.
+    const over = await run(repeated(4), { limits })
+    expect(over.images.map(i => i.src)).toEqual(['second.png'])
+    expect(over.failures).toEqual([{ src: 'figs/loss.png', reason: expect.stringMatching(/referenced 4 times/u) }])
+  })
+
   it('degrades with a message on a host whose fs cannot read bytes', async () => {
     const { readBytes: _, ...old } = diskFs()
     const { failures } = await run('<img data-viz-src="figs/loss.png">', { readFile: read(old) })
@@ -199,6 +212,20 @@ describe('URL images', () => {
   let port: number
   const hits: string[] = []
 
+  /** When the server saw each endless response's connection close. */
+  const closed = new Map<string, Promise<void>>()
+  /** A response whose body never ends: it writes as fast as the client reads. */
+  const endless = (path: string, res: import('node:http').ServerResponse, status: number, headers: Record<string, string>) => {
+    closed.set(path, new Promise(done => res.on('close', () => done())))
+    res.writeHead(status, headers)
+    const chunk = Buffer.alloc(64 * 1024)
+    const pump = () => {
+      while (!res.destroyed && res.write(chunk)) { /* keep the pipe full */ }
+    }
+    res.on('drain', pump)
+    pump()
+  }
+
   beforeAll(async () => {
     server = createServer((req, res) => {
       hits.push(req.url!)
@@ -217,6 +244,8 @@ describe('URL images', () => {
       if (path === '/to-metadata') return res.writeHead(302, { location: 'http://169.254.169.254/latest/meta-data/' }).end()
       if (path === '/to-file') return res.writeHead(302, { location: 'file:///etc/passwd' }).end()
       if (path === '/hang') return
+      if (path === '/endless-404') return endless(path, res, 404, {})
+      if (path === '/endless-302') return endless(path, res, 302, { location: '/a.png' })
       res.writeHead(500).end()
     })
     await new Promise<void>(done => server.listen(0, '127.0.0.1', done))
@@ -285,6 +314,17 @@ describe('URL images', () => {
     expect((await fetchOne(`http://user:pw@127.0.0.1:${port}/a.png`)).failures[0]!.reason).toMatch(/credentials/u)
     expect((await fetchOne('ftp://example.com/a.png')).failures[0]!.reason).toMatch(/ftp: URLs are not supported/u)
     expect((await fetchOne('data:image/png;base64,AAAA')).failures[0]!.reason).toMatch(/put it in src/u)
+  })
+
+  it('drops an unread redirect or error body at once instead of draining it to the deadline', async () => {
+    const within = async (path: string) => await Promise.race([
+      closed.get(path)!.then(() => 'closed'),
+      new Promise(done => setTimeout(() => done('still streaming'), 1500)),
+    ])
+    expect((await fetchOne(`http://127.0.0.1:${port}/endless-404`)).failures[0]!.reason).toBe('the server answered HTTP 404')
+    expect(await within('/endless-404')).toBe('closed')
+    expect((await fetchOne(`http://127.0.0.1:${port}/endless-302`)).images).toHaveLength(1)
+    expect(await within('/endless-302')).toBe('closed')
   })
 
   it('carries a URL image an earlier call fetched instead of fetching it again', async () => {

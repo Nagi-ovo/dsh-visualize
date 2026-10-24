@@ -256,7 +256,9 @@ export function visualizeTool(
       const cardStyle = action === 'update' ? styleOfCardPath(args.path!) ?? configured : configured
       const suffix = mode === 'page' ? PAGE_SUFFIX : '.html'
       const target = source ?? await store.create(`${slugOf(title)}-${contentHash(fragment)}.${cardStyle}${suffix}`)
-      await target.write(fragment)
+      // Images resolve before anything is written: a call cancelled during a
+      // slow fetch must leave the card as it was, or its file would hold a
+      // patch no result reported and a retry of the same old_str would miss.
       // A patch carries the URL images its card already fetched; workspace
       // files are re-read, so a regenerated figure shows after any patch.
       const previous: StoredImage[] = action === 'update' ? await target.images?.read() ?? [] : []
@@ -269,6 +271,10 @@ export function visualizeTool(
         limits: imageLimits,
         signal: exec.signal,
       })
+      // Read as optional: specs drive execute without a signal.
+      const signal: AbortSignal | undefined = exec.signal
+      signal?.throwIfAborted()
+      await target.write(fragment)
       await target.images?.write(resolved.images)
       const embedded = resolved.images.map(cardImageOf)
       const report = imageReport(embedded, resolved.failures)

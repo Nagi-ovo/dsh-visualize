@@ -107,7 +107,12 @@ export interface ResolvedImages {
  */
 export async function resolveCardImages(fragment: string, options: ResolveOptions): Promise<ResolvedImages> {
   const limits = options.limits ?? DEFAULT_IMAGE_LIMITS
-  const sources = [...new Set(imageSources(fragment).map(source => source.raw))]
+  const all = imageSources(fragment).map(source => source.raw)
+  const sources = [...new Set(all)]
+  // The card splices the whole image into every tag that names it, so an
+  // image costs its size once per reference, not once per source.
+  const uses = new Map<string, number>()
+  for (const src of all) uses.set(src, (uses.get(src) ?? 0) + 1)
   const failures: ImageFailure[] = []
   if (sources.length === 0) return { images: [], failures }
   const { store } = options
@@ -132,7 +137,7 @@ export async function resolveCardImages(fragment: string, options: ResolveOption
     }
   }))
   // The card budget is spent in document order, so which image misses it
-  // does not depend on network timing.
+  // does not depend on network timing. Each reference counts.
   let budget = limits.maxCardBytes
   const images: StoredImage[] = []
   for (const entry of fetched) {
@@ -141,11 +146,17 @@ export async function resolveCardImages(fragment: string, options: ResolveOption
       continue
     }
     const bytes = entry.kept?.bytes ?? entry.image!.data.byteLength
-    if (bytes > budget) {
-      failures.push({ src: entry.src, reason: cardBudgetReason(limits) })
+    const count = uses.get(entry.src) ?? 1
+    if (bytes * count > budget) {
+      failures.push({
+        src: entry.src,
+        reason: count === 1
+          ? cardBudgetReason(limits)
+          : `${cardBudgetReason(limits)} — it is referenced ${count} times and every reference embeds a full copy, so reference it once or use a smaller image`,
+      })
       continue
     }
-    budget -= bytes
+    budget -= bytes * count
     if (entry.kept !== undefined) {
       images.push(entry.kept)
       continue
@@ -330,6 +341,10 @@ export function workspaceImageReader(ctx: Context, root: string | undefined): Fi
     if (!fs.contains(rootTarget, target)) {
       throw new ImageError('resolves outside the workspace through a symlink; only files inside the workspace can be embedded')
     }
+    // Accepted: a symlink swapped in between contains() and readBytes() could
+    // still redirect the read. Doing that needs write access to the
+    // workspace, which the agent already has along with tools that read
+    // anything this could.
     const info = await fs.stat(target, signal)
     if (info === undefined) throw new ImageError('not found in the workspace; check the path relative to the workspace root')
     if (info.type !== 'file') throw new ImageError('not a regular file')
@@ -429,8 +444,11 @@ export function urlFetcher(options: FetcherOptions): UrlFetcher {
       checkUrl(current, policy)
       const response = await get(current, policy, signal)
       const status = response.statusCode ?? 0
+      // A body we do not read is destroyed, not drained: resume() would keep
+      // pulling an unbounded one until the deadline. agent:false, so no
+      // pooled socket is lost.
       if ([301, 302, 303, 307, 308].includes(status)) {
-        response.resume()
+        response.destroy()
         const location = response.headers.location
         if (location === undefined) throw new ImageError(`HTTP ${status} without a Location header`)
         if (hop >= options.maxRedirects) throw new ImageError(`more than ${options.maxRedirects} redirects`)
@@ -438,12 +456,12 @@ export function urlFetcher(options: FetcherOptions): UrlFetcher {
         continue
       }
       if (status !== 200) {
-        response.resume()
+        response.destroy()
         throw new ImageError(`the server answered HTTP ${status}`)
       }
       const encoding = response.headers['content-encoding']
       if (encoding !== undefined && encoding !== 'identity') {
-        response.resume()
+        response.destroy()
         throw new ImageError(`the server sent a ${encoding}-encoded body, which is not decoded here`)
       }
       const length = Number(response.headers['content-length'])
