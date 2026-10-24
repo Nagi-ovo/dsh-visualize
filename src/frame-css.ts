@@ -57,6 +57,20 @@ body {
   color: var(--foreground);
   font: 400 var(--font-size-base)/1.5 var(--font-sans);
 }
+/* A data-viz-src image the tool could not embed, or not yet: a neutral box showing its alt text. */
+img[data-viz-src]:not([src]) {
+  display: inline-block;
+  min-width: 160px;
+  min-height: 90px;
+  max-width: 100%;
+  padding: 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: var(--font-size-small);
+  vertical-align: middle;
+}
 h1, h2, h3 { margin: 0 0 0.5em; font-family: var(--font-display); font-weight: 500; line-height: 1.3; }
 h1 { font-size: 1.3em; }
 h2 { font-size: 1.15em; }

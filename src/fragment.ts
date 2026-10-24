@@ -67,7 +67,35 @@ export interface VisualizeMeta {
    * styles existed, which read as the default.
    */
   style: StyleId
+  /**
+   * Images the tool resolved from the fragment's `data-viz-src` attributes,
+   * as references only: the bytes stay in the plugin's card store and reach
+   * the card through {@link IMAGE_ROUTE_PATH}. Absent when there are none.
+   */
+  images?: CardImage[]
 }
+
+/** Image formats a card embeds; the tool verifies each by its magic bytes. */
+export type CardImageType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/svg+xml'
+
+/** Every {@link CardImageType}. */
+export const CARD_IMAGE_TYPES: readonly CardImageType[] = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']
+
+/** One resolved `data-viz-src`, as persisted meta carries it. */
+export interface CardImage {
+  /** The attribute value exactly as the fragment spells it, entities undecoded. */
+  src: string
+  /** Store id the image route serves: `<session segment>/<sha256>.<ext>`. */
+  id: string
+  type: CardImageType
+  bytes: number
+}
+
+/**
+ * Exact route on the host's authenticated `/api` channel (dsh 0.1.7+) that
+ * serves a stored card image by its {@link CardImage.id}.
+ */
+export const IMAGE_ROUTE_PATH = '/api/dsh-visualize/image'
 
 /**
  * Characters of real card content quoted back when a patch fails to apply, so
@@ -170,7 +198,28 @@ export function visualizeMetaFrom(meta: unknown): VisualizeMeta | undefined {
   const { fragment, title, mode, path, summary } = record
   if (typeof fragment !== 'string' || typeof title !== 'string' || typeof path !== 'string') return undefined
   if (!isVisualizeMode(mode)) return undefined
-  return { kind: 'visualize', fragment, title, mode, path, ...summaryField(summary), style: styleIdFrom(record['style']) }
+  return {
+    kind: 'visualize', fragment, title, mode, path, ...summaryField(summary), style: styleIdFrom(record['style']),
+    ...imagesField(record['images']),
+  }
+}
+
+/**
+ * The optional image references as a spreadable field. A malformed entry is
+ * dropped on its own: that image shows its placeholder, the card still renders.
+ * @param images - the raw wire value.
+ * @returns `{ images }` with every well-formed entry, or an empty object.
+ */
+function imagesField(images: unknown): { images?: CardImage[] } {
+  if (!Array.isArray(images)) return {}
+  const list = images.flatMap((entry: unknown) => {
+    if (typeof entry !== 'object' || entry === null) return []
+    const { src, id, type, bytes } = entry as Record<string, unknown>
+    if (typeof src !== 'string' || typeof id !== 'string' || typeof bytes !== 'number') return []
+    if (!CARD_IMAGE_TYPES.includes(type as CardImageType)) return []
+    return [{ src, id, type: type as CardImageType, bytes }]
+  })
+  return list.length > 0 ? { images: list } : {}
 }
 
 /**

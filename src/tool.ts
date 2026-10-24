@@ -15,7 +15,17 @@ import type { Context } from '@deepseek-ai/cordis'
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 // Type-only: pulls the `ctx.fs` Context merge.
 import type {} from '@deepseek-ai/dsh-fs'
-import { cardStore, type CardFile } from './storage.ts'
+import { cardStore, type CardFile, type StoredImage } from './storage.ts'
+import {
+  cardImageOf,
+  DEFAULT_IMAGE_LIMITS,
+  imageReport,
+  resolveCardImages,
+  urlFetcher,
+  workspaceImageReader,
+  type ImageLimits,
+  type UrlFetcher,
+} from './images.ts'
 import { SKILL_BODY_PATH, SKILL_RESOURCE_DIR } from './skill.ts'
 import { FragmentLintGate } from './lint-gate.ts'
 import { DEFAULT_STYLE, STYLE_IDS, type StyleId } from './style.ts'
@@ -52,6 +62,22 @@ const DESCRIPTION =
   + `(its relative paths resolve against ${SKILL_RESOURCE_DIR}) with a file or shell tool; `
   + 'do not search for it anywhere else.'
 
+/** How the tool embeds `data-viz-src` images (images.ts). */
+export interface ToolImageOptions {
+  /**
+   * Whether the browser can fetch stored images right now: the plugin's
+   * image route is registered on the host's `/api` channel. Without it every
+   * image is reported as undeliverable instead of being stored for nothing.
+   */
+  readonly delivery: () => boolean
+  /** URL fetcher; defaults to the SSRF-guarded node fetcher. */
+  readonly fetchUrl?: UrlFetcher
+  readonly limits?: ImageLimits
+}
+
+/** Why images cannot reach the card on a host without the image route. */
+const NO_IMAGE_ROUTE = 'this dsh host cannot deliver images to cards (the image route needs dsh 0.1.7 or later)'
+
 /**
  * Build the `visualize` tool definition over the composed filesystem seam.
  * @param ctx - registrant context carrying `ctx.fs` and the host home path for the card copy.
@@ -60,15 +86,19 @@ const DESCRIPTION =
  *   id, or a reader the tool asks on every call so a changed setting applies
  *   to the next card. The description names the style read when the
  *   definition is built; the plugin rebuilds it when the setting changes.
+ * @param images - image embedding; by default no route, so every image is reported undeliverable.
  * @returns the tool definition to register on `ctx.tools`.
  */
 export function visualizeTool(
   ctx: Context,
   maxFragmentBytes: number,
   style: StyleId | (() => StyleId) = DEFAULT_STYLE,
+  images: ToolImageOptions = { delivery: () => false },
 ): ToolDefinition {
   const lint = new FragmentLintGate()
   const currentStyle = typeof style === 'function' ? style : () => style
+  const imageLimits = images.limits ?? DEFAULT_IMAGE_LIMITS
+  const fetchUrl = images.fetchUrl ?? urlFetcher({ maxRedirects: imageLimits.maxRedirects })
   return defineTool({
     name: VISUALIZE_TOOL_NAME,
     description: DESCRIPTION + styleToolNote(currentStyle()),
@@ -85,7 +115,8 @@ export function visualizeTool(
         type: 'string',
         description:
           'create only, required: the inline HTML fragment to render (markup, style, and script — '
-          + 'no document skeleton).',
+          + 'no document skeleton). For a workspace image or a web image off the CDN allowlist, write '
+          + '<img data-viz-src="figs/plot.png"> or <img data-viz-src="https://…"> and the tool embeds it.',
       },
       title: {
         type: 'string',
@@ -134,16 +165,33 @@ export function visualizeTool(
           fragment: { type: 'string', required: true },
           warnings: { type: 'string' },
           style: { type: 'string' },
+          images: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                src: { type: 'string', required: true },
+                id: { type: 'string', required: true },
+                type: { type: 'string', required: true },
+                bytes: { type: 'integer', required: true },
+              },
+            },
+          },
+          imageReport: { type: 'string' },
         },
       },
       // Model-facing text stays a confirmation: the fragment is already in the
       // model's own output (the argument, whole or patched) and re-echoing it
       // would double its context cost. The patched path is named so a further
       // correction patches the new card rather than the superseded one.
+      // Image bytes never enter the result: the report names what was
+      // embedded and, per failed image, why.
       render: (_args, value) => [{
         type: 'text',
         text: resultText(value),
-      }, ...value.warnings ? [{ type: 'text' as const, text: value.warnings }] : []],
+      }, ...value.warnings ? [{ type: 'text' as const, text: value.warnings }] : [],
+      ...value.imageReport ? [{ type: 'text' as const, text: value.imageReport }] : []],
       // Project the fragment into persisted meta so the card survives replay:
       // the canonical value is not on the wire, only content + meta are.
       presentationMeta: (_args, value) => ({
@@ -154,6 +202,8 @@ export function visualizeTool(
         path: value.path,
         ...value.summary === undefined ? {} : { summary: value.summary },
         style: value.style ?? DEFAULT_STYLE,
+        // References only; the card fetches the bytes from the image route.
+        ...value.images?.length ? { images: value.images } : {},
       }),
     },
     // A create writes only a content-addressed card file; concurrent
@@ -207,6 +257,21 @@ export function visualizeTool(
       const suffix = mode === 'page' ? PAGE_SUFFIX : '.html'
       const target = source ?? await store.create(`${slugOf(title)}-${contentHash(fragment)}.${cardStyle}${suffix}`)
       await target.write(fragment)
+      // A patch carries the URL images its card already fetched; workspace
+      // files are re-read, so a regenerated figure shows after any patch.
+      const previous: StoredImage[] = action === 'update' ? await target.images?.read() ?? [] : []
+      const resolved = await resolveCardImages(fragment, {
+        readFile: workspaceImageReader(ctx, store.workspaceRoot),
+        fetchUrl,
+        store: store.images,
+        ...images.delivery() ? {} : { unavailable: NO_IMAGE_ROUTE },
+        previous,
+        limits: imageLimits,
+        signal: exec.signal,
+      })
+      await target.images?.write(resolved.images)
+      const embedded = resolved.images.map(cardImageOf)
+      const report = imageReport(embedded, resolved.failures)
       return {
         action,
         path: target.displayPath,
@@ -217,6 +282,8 @@ export function visualizeTool(
         ...summary ? { summary } : {},
         style: cardStyle,
         ...warnings ? { warnings } : {},
+        ...embedded.length > 0 ? { images: embedded } : {},
+        ...report === undefined ? {} : { imageReport: report },
       }
     },
     presentCall: () => ({

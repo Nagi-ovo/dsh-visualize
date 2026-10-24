@@ -132,6 +132,8 @@ retrying.
   `cdnjs.cloudflare.com`, `esm.sh`, `cdn.jsdelivr.net`, `unpkg.com`,
   `fonts.googleapis.com`, `fonts.gstatic.com`, `fonts.bunny.net` — always
   with a pinned version.
+- Show an image the card cannot load itself — a workspace file, or a web
+  image off that list — with `data-viz-src`; see "Images" below.
 - Every color comes from a theme variable or a `light-dark()` pair — the
   token list and utility classes are in `references/design.md`.
 - Never declare `color-scheme` yourself. The document already carries the
@@ -142,6 +144,31 @@ retrying.
   recipes (Chart.js gives this by default).
 - Before finishing, confirm every element your script queries exists, every
   identifier is defined, and the main interaction visibly changes the output.
+
+## Images
+
+The card cannot read workspace files or load images from hosts off the
+allowlist. Write `data-viz-src` on the `<img>` instead of `src`, and the tool
+embeds the image when you call it:
+
+- `<img data-viz-src="figs/loss.png" alt="…">` — a file inside the
+  workspace, relative to its root. Save a generated figure there first (for
+  example matplotlib `savefig`), then render the card.
+- `<img data-viz-src="https://…" alt="…">` — a public web image, fetched by
+  the tool. Local servers and private networks are refused; copy such an
+  image into the workspace and give its path.
+- PNG, JPEG, GIF, WebP or SVG only, at most 5 MB each and 12 MB and 16
+  images per card. Downscale big figures before embedding them.
+- Give every image an `alt`, and `width`/`height` where you know them: an
+  image that fails shows a placeholder box with its alt text, and the rest
+  of the card still renders.
+- Only `<img>` tags in the markup are embedded, not ones a script builds. A
+  script that measures an image waits for its `load` event.
+- The result lists each image that failed and why. Fix the path or URL and
+  patch the card; do not fall back to `src`.
+- An `update` reuses fetched URL images and reads workspace files again, so
+  after regenerating a figure under the same name, any patch shows the new
+  one.
 
 ## Handing back to the conversation
 

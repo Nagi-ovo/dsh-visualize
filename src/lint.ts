@@ -99,6 +99,11 @@ export const LINT_RULES = {
     message: 'document.currentScript is used to locate the root',
     fix: 'give the root element a unique id and find it with document.getElementById(...)',
   },
+  VZ011: {
+    severity: 'error',
+    message: 'image from a host the card blocks',
+    fix: 'write data-viz-src="<the same URL>" instead of src; the tool fetches the image and embeds it in the card',
+  },
   VZ101: {
     severity: 'warn',
     message: 'hard-coded colour, which ignores the host theme',
@@ -129,6 +134,12 @@ export const LINT_RULES = {
     severity: 'warn',
     message: 'relative or bare URL, which cannot resolve inside the sandboxed card',
     fix: 'use a full https URL on an allowlisted host, or inline the resource (data: URLs work)',
+  },
+  VZ107: {
+    severity: 'warn',
+    message: 'relative image path, which cannot resolve inside the sandboxed card',
+    fix: 'for a workspace file write data-viz-src="<path relative to the workspace root>" instead of src; '
+      + 'the tool reads the file and embeds it in the card',
   },
   VZ199: {
     severity: 'warn',
@@ -239,6 +250,31 @@ export function validateFragment(fragment: string, maxBytes: number): number {
   const errors = findings.filter(f => f.severity === 'error')
   if (errors.length > 0) throw new Error(formatRejection(errors, findings.filter(f => f.severity === 'warn')))
   return sizeBytes
+}
+
+/** One `data-viz-src` attribute on an `<img>` in the fragment's markup. */
+export interface ImageSource {
+  /** The attribute value as written, entities undecoded. */
+  readonly raw: string
+  /** UTF-16 offset of the value's first character. */
+  readonly offset: number
+}
+
+/**
+ * The `<img data-viz-src>` attributes in the markup, in document order.
+ * Script and style bodies and comments are not markup, so an image a script
+ * builds at run time is not listed.
+ * @param fragment - the card's markup.
+ * @returns every non-empty attribute, duplicates included.
+ */
+export function imageSources(fragment: string): ImageSource[] {
+  const out: ImageSource[] = []
+  for (const tag of scanDocument(fragment).tags) {
+    if (tag.closing || tag.name !== 'img') continue
+    const a = tag.attrs.find(entry => entry.name === 'data-viz-src')
+    if (a?.value !== undefined && a.value.trim().length > 0) out.push({ raw: a.value, offset: a.valueStart })
+  }
+  return out
 }
 
 /** How a finding relates to the patch that produced the linted card. */
@@ -1036,8 +1072,9 @@ function checkResources(doc: Doc, sink: FindingSink): void {
     const names = RESOURCE_ATTRS.get(tag.name)
     if (names === undefined) continue
     if (tag.name === 'link' && /\b(?:preconnect|dns-prefetch)\b/iu.test(attr(tag, 'rel') ?? '')) continue
+    const image = tag.name === 'img'
     for (const a of tag.attrs) {
-      if (a.value !== undefined && names.includes(a.name)) reportUrl(sink, a.value, a.valueStart, 'markup', false)
+      if (a.value !== undefined && names.includes(a.name)) reportUrl(sink, a.value, a.valueStart, 'markup', false, undefined, image)
     }
   }
   for (const decl of doc.decls) {
@@ -1070,6 +1107,7 @@ function checkResources(doc: Doc, sink: FindingSink): void {
  * @param context - `module` for JS import specifiers, where bare names are legal with an import map.
  * @param importMap - whether the fragment ships an import map.
  * @param cap - `warn` when it is not certain the URL is ever loaded.
+ * @param image - an `<img src>`, which `data-viz-src` can carry instead.
  */
 function reportUrl(
   sink: FindingSink,
@@ -1078,6 +1116,7 @@ function reportUrl(
   context: 'markup' | 'module',
   importMap: boolean,
   cap?: 'warn',
+  image = false,
 ): void {
   const url = raw.trim()
   if (url.length === 0 || url.startsWith('#') || url.includes('${')) return
@@ -1087,7 +1126,7 @@ function reportUrl(
   const scheme = /^([a-z][\w+.-]*):/iu.exec(url)?.[1]?.toLowerCase()
   if (scheme === undefined && !url.startsWith('//')) {
     if (context === 'module' && importMap) return
-    sink.add('VZ106', at, url.length, JSON.stringify(url))
+    sink.add(image ? 'VZ107' : 'VZ106', at, url.length, JSON.stringify(url))
     return
   }
   let parsed: URL
@@ -1098,7 +1137,9 @@ function reportUrl(
   }
   const host = parsed.host.toLowerCase()
   if (!ALLOWED_HOSTS.includes(host)) {
-    sink.add('VZ005', at, url.length, `${host || url} is not on the allowlist`, cap)
+    // Any http(s) image can be embedded by the tool; other schemes cannot.
+    const embeddable = image && (scheme === undefined || scheme === 'http' || scheme === 'https')
+    sink.add(embeddable ? 'VZ011' : 'VZ005', at, url.length, `${host || url} is not on the allowlist`, cap)
     return
   }
   if (scheme !== undefined && scheme !== 'https') {

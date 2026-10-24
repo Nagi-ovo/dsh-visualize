@@ -25,6 +25,10 @@
  * the page through the same script-free wrapper. A secondary toggle shows the
  * page in the conversation, for browsers or hosts that will not open a tab.
  *
+ * Images: a card whose meta lists `data-viz-src` images waits for their
+ * bytes from the plugin's image route and renders them as data URLs under
+ * the unchanged frame CSP (images.ts); one that fails keeps its placeholder.
+ *
  * Prompts: where the registration injects a {@link PromptSink}, an in-chat
  * frame's `dshViz.prompt(text)` lands in the composer as a draft, behind the
  * parent-side gates in prompt-bridge.ts. New-window tabs and thumbnails never
@@ -39,6 +43,7 @@ import { PROMPT_INTERVAL_MS, readerIsInFrame, readPromptMessage, type PromptSink
 import { buildWindowDoc, FRAME_SANDBOX } from '../window-doc.ts'
 import { resolveTheme } from './theme.ts'
 import { liveStyle, noteSettledStyle } from './style.ts'
+import { useCardImages } from './images.ts'
 
 /** Iframe height bounds; content beyond the cap scrolls inside the frame. */
 const MIN_HEIGHT = 48
@@ -144,6 +149,11 @@ function hostIsZh(): boolean {
 /** Accessible name of the open control, in the host's language. */
 function openLabel(): string {
   return hostIsZh() ? '在新窗口打开' : 'Open in new window'
+}
+
+/** Status line while a card's images load, in the host's language. */
+function loadingImagesLabel(): string {
+  return hostIsZh() ? '正在载入图片…' : 'loading images…'
 }
 
 /** Arrow-out-of-box glyph, sized to the 12px header text. */
@@ -302,7 +312,10 @@ function SizedFrame({ meta, callId, prompt }: { meta: VisualizeMeta; callId: str
  * turn tail, replay — goes through here, so a page card is a launcher in all
  * of them.
  */
-export function Frame({ meta, callId, prompt }: { meta: VisualizeMeta; callId: string; prompt?: PromptSink | undefined }) {
+export function Frame({ meta: persisted, callId, prompt }: { meta: VisualizeMeta; callId: string; prompt?: PromptSink | undefined }) {
+  // Every surface below builds from this meta, images already embedded.
+  const meta = useCardImages(persisted)
+  if (meta === undefined) return <div style={headerStyle}>{persisted.title} · {loadingImagesLabel()}</div>
   if (meta.mode === 'page') return <PageLauncher meta={meta} callId={callId} prompt={prompt} />
   const label = openLabel()
   return (

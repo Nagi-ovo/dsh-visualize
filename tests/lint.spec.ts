@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { lintFragment, type LintCode } from '../src/lint.ts'
+import { imageSources, lintFragment, type LintCode } from '../src/lint.ts'
 
 const MAX = 1_000_000
 
@@ -104,7 +104,7 @@ describe('VZ005 / VZ006 / VZ105 / VZ106 external resources', () => {
     expect(only('<div id="a"></div><script src="https://cdn.example.com/x@1.0.0/x.js"></script>', 'VZ005').message)
       .toContain('cdn.example.com')
     expect(codes('<link id="a" rel="stylesheet" href="https://evil.test/a.css">')).toContain('VZ005')
-    expect(codes('<img id="a" src="https://upload.wikimedia.org/a.png">')).toContain('VZ005')
+    expect(codes('<video id="a" poster="https://upload.wikimedia.org/a.png"></video>')).toContain('VZ005')
     expect(codes('<style>@import url("https://evil.test/a.css");</style><div id="a"></div>')).toContain('VZ005')
     expect(codes('<div id="a" style="background: url(https://evil.test/bg.png)"></div>')).toContain('VZ005')
     // The column points at the URL itself, quoted or not.
@@ -123,11 +123,11 @@ describe('VZ005 / VZ006 / VZ105 / VZ106 external resources', () => {
   it('VZ005: tag names that are Object.prototype keys (Codex repro)', () => {
     const report = lintFragment('<constructor x="1"></constructor><img id="a" src="https://evil.example/x.png">', MAX)
     expect(report.skipped).toBeUndefined()
-    expect(report.findings.map(f => f.code)).toEqual(['VZ005'])
+    expect(report.findings.map(f => f.code)).toEqual(['VZ011'])
     for (const name of ['__proto__', 'toString', 'hasOwnProperty', 'valueOf']) {
       const r = lintFragment(`<${name} ${name}="1" src="https://evil.example/x.png"></${name}><img id="a" src="https://evil.example/y.png">`, MAX)
       expect(r.skipped).toBeUndefined()
-      expect(r.findings.map(f => f.code)).toEqual(['VZ005'])
+      expect(r.findings.map(f => f.code)).toEqual(['VZ011'])
     }
   })
 
@@ -171,6 +171,42 @@ describe('VZ005 / VZ006 / VZ105 / VZ106 external resources', () => {
       + '<script type="module">import * as d3 from "d3";</script>'
     expect(codes(mapped)).toEqual([])
     expect(codes('<script type="importmap">{"imports":{"d3":"https://evil.test/d3.js"}}</script><div id="a"></div>')).toContain('VZ005')
+  })
+})
+
+describe('VZ011 / VZ107 images the card cannot load', () => {
+  it('VZ011: an <img src> on a blocked host is an error that points at data-viz-src', () => {
+    const f = only('<img id="a" src="https://upload.wikimedia.org/a.png" alt="x">', 'VZ011')
+    expect(f.severity).toBe('error')
+    expect(f.fix).toContain('data-viz-src')
+    expect(codes('<img id="a" src="//example.com/a.png">')).toEqual(['VZ011'])
+    // Only images get the image fix; other tags keep the general rule.
+    expect(codes('<video id="a" src="https://example.com/a.mp4"></video>')).toEqual(['VZ005'])
+    // A scheme the tool cannot fetch either stays VZ005.
+    expect(codes('<img id="a" src="ftp://example.com/a.png">')).toEqual(['VZ005'])
+  })
+
+  it('VZ107: a relative <img src> warns toward a workspace data-viz-src', () => {
+    const f = only('<img id="a" src="figs/loss.png">', 'VZ107')
+    expect(f.severity).toBe('warn')
+    expect(f.fix).toContain('workspace root')
+    expect(codes('<script id="a" src="chart.js"></script>')).toEqual(['VZ106'])
+  })
+
+  it('leaves data-viz-src, data: and allowlisted images alone', () => {
+    expect(codes('<img id="a" data-viz-src="https://example.com/a.png">')).toEqual([])
+    expect(codes('<img id="a" data-viz-src="./figs/loss.png">')).toEqual([])
+    expect(codes('<img id="a" src="data:image/png;base64,iVBORw0KGgo=">')).toEqual([])
+    expect(codes('<img id="a" src="https://cdn.jsdelivr.net/npm/simple-icons@13.0.0/icons/github.svg">')).toEqual([])
+  })
+})
+
+describe('imageSources', () => {
+  it('lists markup data-viz-src values as written, skipping scripts and comments', () => {
+    const fragment = '<div id="a"><img data-viz-src="./a.png?x=1&amp;y=2" alt="a">\n'
+      + '<IMG DATA-VIZ-SRC=b.png><img data-viz-src=""><!-- <img data-viz-src="c.png"> -->'
+      + '<script>el.innerHTML = \'<img data-viz-src="d.png">\'</script><img src="e.png"></div>'
+    expect(imageSources(fragment).map(s => s.raw)).toEqual(['./a.png?x=1&amp;y=2', 'b.png'])
   })
 })
 
