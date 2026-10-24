@@ -416,6 +416,11 @@ describe('VZ102 lookups of absent ids', () => {
     expect(codes('<div id="lab"></div><script>document.querySelector("#lab-plot svg")</script>')).toContain('VZ102')
   })
 
+  it('checks the #id a dshViz.bind or dshViz.chart call names', () => {
+    expect(codes('<div id="lab"></div><script>dshViz.bind("#lab-x", function () {})</script>')).toEqual(['VZ102'])
+    expect(codes('<div id="lab"><canvas id="lab-plot"></canvas></div><script>dshViz.bind("#lab", function () {}); dshViz.chart("#lab-plot", {})</script>')).toEqual([])
+  })
+
   it('still checks lookups when a static id is set with a space after the comma', () => {
     // `\s*,\s*(?!["'])` let the second \s* give back one space, so a literal id read as a built one.
     expect(codes('<div id="lab"></div><script>n.setAttribute("id", "lab-x"); document.getElementById("lab-y")</script>')).toEqual(['VZ102'])

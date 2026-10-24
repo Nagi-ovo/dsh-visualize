@@ -1749,6 +1749,13 @@ function checkIds(doc: Doc, sink: FindingSink): void {
     const id = /^\s*#([A-Za-z_][\w-]*)(?=$|[\s.:[>+~])/u.exec(s.value)?.[1]
     if (id !== undefined) lookups.push({ id, s })
   }
+  // dshViz.bind / dshViz.chart take their root or canvas as a '#id' selector first.
+  for (const m of js.matchAll(/\bdshViz\s*\.\s*(?:bind|chart)\s*\(/gu)) {
+    const s = stringAt(doc, m.index + m[0].length)
+    if (!s || s.interpolated || nextChar(src, s.end) !== ',' || /\\/u.test(s.value)) continue
+    const id = /^\s*#([A-Za-z_][\w-]*)\s*$/u.exec(s.value)?.[1]
+    if (id !== undefined) lookups.push({ id, s })
+  }
   const lookupCount = new Map<string, number>()
   for (const { id } of lookups) lookupCount.set(id, (lookupCount.get(id) ?? 0) + 1)
   const occurrences = wordCounter(src)

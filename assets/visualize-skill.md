@@ -25,9 +25,9 @@ first chart, read `references/charts.md`; before styling anything, read
 - `references/design.md` — taste, theme tokens, base classes, layout.
 - `references/charts.md` — Chart.js-first charting, theme-color resolution,
   hand-rolled SVG rules, entrance animation recipes.
-- `examples/interactive-simulator.html` — sliders driving a Chart.js area
-  curve: probe-resolved theme colors, gradient fill, in-place updates. The
-  template for any standard chart.
+- `examples/interactive-simulator.html` — sliders wired with `dshViz.bind`
+  driving a `dshViz.chart` area curve: theme colors, gradient fill, in-place
+  updates, kept settings. The template for any standard chart.
 - `examples/comparison-chart.html` — a hand-rolled SVG comparison with
   direct labels and a hover detail. The template for custom visuals only.
 
@@ -66,8 +66,10 @@ not the chat column:
   reading-width content). Group content in `<section class="viz-section">`
   with its own heading.
 - Several views go behind tabs: `.viz-tabs` holding `<button
-  class="viz-tab" role="tab" aria-selected="true|false">`. Every filter
-  visibly changes every view it governs.
+  class="viz-tab" role="tab" aria-selected="true|false"
+  aria-controls="<panel id>">`. The frame switches tabs and shows their
+  panels by itself; write no tab script. Every filter visibly changes every
+  view it governs.
 - Lay out with grid: a KPI row, then charts two or three across, then
   detail tables. Reflow to one column below about 768px.
 - The document scrolls; `min-height: 100vh` is fine on a full-screen canvas
@@ -146,6 +148,34 @@ retrying.
 - Before finishing, confirm every element your script queries exists, every
   identifier is defined, and the main interaction visibly changes the output.
 
+## Wiring controls
+
+The frame's `dshViz` helper already does the wiring most cards repeat. Use
+it instead of hand-writing listeners, readout updates and number formatting:
+
+```js
+dshViz.bind('#my-viz', function (p) {
+  // p.rate, p.mode, …: every control under #my-viz with a `name`
+  redraw(p);
+  return { total: p.rate * 12 };  // fills <output data-viz-out="total">
+});
+```
+
+- `dshViz.bind(root, render)` calls `render(p)` once now and again after
+  every change. `p` holds each control's value by its `name` (or
+  `data-viz-param`): numbers from range and number inputs and numeric
+  options, booleans from checkboxes, the checked radio's value.
+- Every `[data-viz-out="key"]` inside `root` shows what `render` returned
+  under `key`, else `p[key]`; numbers go through `dshViz.fmt`. Return
+  formatted strings for anything with a unit.
+- `bind` returns a function that renders again; call it when something
+  outside the controls changes.
+- `dshViz.fmt(n, digits)` or `dshViz.fmt(n, { digits, sig, unit, percent,
+  compact, sign, currency })` formats a number with grouping. `unit` is
+  appended as written (`' min'`, `'°C'`); `percent` takes a fraction.
+- `dshViz.chart` creates a Chart.js chart that `render` can feed from its
+  first call; see `references/charts.md`.
+
 ## Images
 
 The card cannot read workspace files or load images from hosts off the
@@ -179,9 +209,11 @@ patch it. Keep the choices the user made so it comes back as they left it:
 - Put `data-viz-keep` on a container (usually your root) and every control
   inside with an `id` or `name` is saved on `input` / `change` and restored
   on load; radios share a `name`. A single control takes the attribute
-  itself, optionally with a key: `data-viz-keep="speed"`.
+  itself, optionally with a key: `data-viz-keep="speed"`. A `.viz-tabs`
+  with an `id` in there keeps its selected tab too.
 - Restoring fires the control's `input` and `change` events, so handlers
-  you wired redraw. Write controls before the script that reads them.
+  you wired redraw, and `dshViz.bind` renders the restored values first.
+  Write controls before the script that reads them.
 - Other state the user chose — a selected item, a step, a zoom — goes
   through `dshViz.state.set(key, value)` and
   `dshViz.state.get(key, fallback)`: JSON values, under 16 KB per card,

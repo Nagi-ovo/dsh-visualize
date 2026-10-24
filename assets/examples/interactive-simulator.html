@@ -1,11 +1,11 @@
 <!-- Worked example: sliders driving a Chart.js area curve with summary stats.
-     Idioms on display: pinned CDN build, dshViz.chartDefaults for the card
-     style's chart defaults and resolved theme colors (canvas cannot read CSS
-     variables), the first draw after dshViz.fontsReady, a soft gradient fill
-     under the single measure, container-driven sizing, the free first-render entrance, and
-     chart.update() so control changes transition in place instead of
-     replaying the entrance. -->
-<div id="sim-cooling">
+     Idioms on display: pinned CDN build; dshViz.bind wiring named controls
+     to one render and its readouts; dshViz.chart applying the card style's
+     chart defaults, drawing once fonts settle with the latest data and its
+     free entrance, then updating in place; theme.fade for the soft gradient
+     under the single measure; dshViz.fmt for readable numbers;
+     data-viz-keep so the reader's settings survive a reload. -->
+<div id="sim-cooling" data-viz-keep>
   <style>
     /* Layout idiom: label | slider | right-aligned bold value on one row;
        stats as bare label + large number, no boxes. */
@@ -13,7 +13,7 @@
     #sim-cooling .row output { text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
     #sim-cooling .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
     #sim-cooling .stats { display: flex; flex-wrap: wrap; gap: 8px 40px; margin: 14px 0 10px; }
-    #sim-cooling .stats .viz-stat-value { font-size: 1.5em; }
+    #sim-cooling .stats .viz-stat-value { font-size: 1.5em; font-variant-numeric: tabular-nums; }
   </style>
   <div class="head">
     <h3 style="margin: 0;">Coffee cooling</h3>
@@ -21,22 +21,22 @@
   </div>
   <div class="row">
     <label class="form-label" for="sim-cooling-rate" style="margin: 0;">Cooling rate</label>
-    <input id="sim-cooling-rate" type="range" min="2" max="30" step="1" value="10">
-    <output id="sim-cooling-rate-out">0.10/min</output>
+    <input id="sim-cooling-rate" name="rate" type="range" min="2" max="30" step="1" value="10">
+    <output data-viz-out="rate"></output>
   </div>
   <div class="row">
-    <label class="form-label" for="sim-cooling-years" style="margin: 0;">Window</label>
-    <input id="sim-cooling-years" type="range" min="15" max="120" step="5" value="60">
-    <output id="sim-cooling-years-out">60 min</output>
+    <label class="form-label" for="sim-cooling-minutes" style="margin: 0;">Window</label>
+    <input id="sim-cooling-minutes" name="minutes" type="range" min="15" max="120" step="5" value="60">
+    <output data-viz-out="minutes"></output>
   </div>
   <div class="stats">
     <div>
       <div class="text-small">Temp at window end</div>
-      <div class="viz-stat-value" id="sim-cooling-end" style="font-variant-numeric: tabular-nums;">—</div>
+      <div class="viz-stat-value" data-viz-out="end">—</div>
     </div>
     <div>
       <div class="text-small">Drinkable (≤60°C) after</div>
-      <div class="viz-stat-value" id="sim-cooling-drink" style="font-variant-numeric: tabular-nums;">—</div>
+      <div class="viz-stat-value" data-viz-out="drink">—</div>
     </div>
   </div>
   <!-- Two-beat entrance: the container (axes, grid) fades in first, then the
@@ -47,81 +47,39 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
 <script>
 (function () {
-  var rateEl = document.getElementById('sim-cooling-rate');
-  var yearsEl = document.getElementById('sim-cooling-years');
   // Newton's cooling: T(t) = Ta + (T0 - Ta) * e^(-kt), coffee starting hot.
   var T0 = 90, TA = 22, DRINKABLE = 60;
+  var deg = { digits: 0, unit: '°C' };
 
-  // Canvas cannot read CSS: the helper resolves the theme and sets the card
-  // style's Chart.js defaults (font, colours, grid, line width).
-  var root = document.getElementById('sim-cooling');
-  var theme = dshViz.chartDefaults(Chart, root);
-  var series = theme.series[0];
-
-  function values() {
-    var k = Number(rateEl.value) / 100, n = Number(yearsEl.value);
-    var out = [];
-    for (var t = 0; t <= n; t++) out.push(TA + (T0 - TA) * Math.exp(-k * t));
-    return out;
-  }
-  function fmt(v) {
-    return v.toFixed(0) + '°C';
-  }
-
-  var chart = null;
-  var ctx = document.getElementById('sim-cooling-plot');
-  // Gradient fill: the series color fading to transparent under the line.
-  var gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 220);
-  gradient.addColorStop(0, theme.alpha(series, 0.25));
-  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-  // values() reads the sliders at draw time, so input before fonts settle is kept.
-  function draw() {
-    var data = values();
-    chart = new Chart(ctx, {
+  // Canvas cannot read CSS: the theme hands the chart resolved colours.
+  var plot = dshViz.chart('#sim-cooling-plot', function (theme) {
+    return {
       type: 'line',
-      data: {
-        labels: data.map(function (_, y) { return y; }),
-        datasets: [{
-          data: data,
-          borderColor: series,
-          backgroundColor: gradient,
-          fill: true,
-          pointRadius: 0,
-          tension: 0.25,
-        }],
-      },
+      data: { datasets: [{ borderColor: theme.series[0], backgroundColor: theme.fade(theme.series[0]), fill: true, pointRadius: 0, tension: 0.25 }] },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
         scales: {
           x: { ticks: { maxTicksLimit: 9 } },
-          y: { ticks: { callback: fmt, maxTicksLimit: 6 } },
+          y: { ticks: { callback: function (v) { return dshViz.fmt(v, deg); }, maxTicksLimit: 6 } },
         },
         interaction: { mode: 'index', intersect: false },
       },
-    });
-  }
+    };
+  });
 
-  function update() {
-    var data = values();
-    var k = Number(rateEl.value) / 100;
-    var toDrinkable = Math.log((T0 - TA) / (DRINKABLE - TA)) / k;
-    document.getElementById('sim-cooling-rate-out').textContent = k.toFixed(2) + '/min';
-    document.getElementById('sim-cooling-years-out').textContent = yearsEl.value + ' min';
-    document.getElementById('sim-cooling-end').textContent = fmt(data[data.length - 1]);
-    document.getElementById('sim-cooling-drink').textContent = toDrinkable.toFixed(1) + ' min';
-    if (!chart) return;
-    chart.data.labels = data.map(function (_, t) { return t; });
-    chart.data.datasets[0].data = data;
-    chart.update(); // transitions in place; the entrance never replays
-  }
-
-  rateEl.addEventListener('input', update);
-  yearsEl.addEventListener('input', update);
-  update();
-  // Draw once fonts settle so tick labels are measured in the final face.
-  dshViz.fontsReady('Cooling rate Window min °C', root).then(draw);
+  // Runs now and on every slider move; what it returns fills the readouts.
+  dshViz.bind('#sim-cooling', function (p) {
+    var k = p.rate / 100, minutes = [], temps = [];
+    for (var t = 0; t <= p.minutes; t++) {
+      minutes.push(t);
+      temps.push(TA + (T0 - TA) * Math.exp(-k * t));
+    }
+    plot.update(minutes, temps); // transitions in place; the entrance never replays
+    return {
+      rate: dshViz.fmt(k, { digits: 2, unit: '/min' }),
+      minutes: p.minutes + ' min',
+      end: dshViz.fmt(temps[temps.length - 1], deg),
+      drink: dshViz.fmt(Math.log((T0 - TA) / (DRINKABLE - TA)) / k, { digits: 1, unit: ' min' }),
+    };
+  });
 })();
 </script>

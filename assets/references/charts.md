@@ -23,55 +23,58 @@ Load the pinned build:
 ```
 
 Canvas cannot resolve CSS variables (`'var(--viz-series-1)'` paints
-nothing) and cannot inherit the CSS font. The frame ships a helper that
-bridges both and applies the card style's chart defaults — font family and
-size, text and grid colours, which axes carry gridlines, dash pattern, axis
-lines, line width, point style. Call it once, before creating any chart, and
-create the chart once the card's fonts have loaded:
+nothing) and cannot inherit the CSS font. Create every chart through
+`dshViz.chart`, which bridges both and applies the card style's chart
+defaults — font family and size, text and grid colours, which axes carry
+gridlines, dash pattern, axis lines, line width, point style:
 
 ```js
-var root = document.getElementById('my-viz');
-var theme = dshViz.chartDefaults(Chart, root);
-var chart = null;
-dshViz.fontsReady('华东华北 Q1 Q2', root).then(function () {
-  chart = new Chart(canvas, {
+var plot = dshViz.chart('#my-viz-plot', function (theme) {
+  return {
     type: 'line',
-    data: { labels: labels, datasets: [{ data: values, borderColor: theme.series[0] }] },
-    options: { responsive: true, maintainAspectRatio: false },
-  });
+    data: { datasets: [{ borderColor: theme.series[0] }] },
+  };
+});
+dshViz.bind('#my-viz', function (p) {
+  plot.update(labelsFor(p), valuesFor(p));
 });
 ```
 
+- The chart is created once the card's fonts have loaded (Chart.js measures
+  labels once). `plot.update(labels, data0, data1, …)` sets the labels
+  (`undefined` keeps them) and each dataset's data in order; before the
+  chart exists it only stores them, so the first draw animates in with the
+  latest values. No existence check, no separate first-draw path.
+- `dshViz.chart` fills in `responsive: true, maintainAspectRatio: false` and
+  drops the legend for a single dataset; set either yourself to override.
+  `plot.chart` is the Chart once `plot.ready` resolves.
 - `theme` holds resolved colours — `series[0..5]`, `context`, `foreground`,
   `muted`, `primary`, `grid`, `axis` — plus `fontFamily`, `fontSize`,
-  `lineWidth`, and `alpha(color, a)` for translucent fills. Chart.js has no
-  palette default, so give each dataset its `borderColor` from `theme`.
-  `dshViz.color('--token', alpha, root)` resolves any other colour token.
-- Pass `fontsReady` the chart's label text (category names, title words) so
-  the font slices those characters need load before the first draw; it
-  resolves within 2.5s even if a font never arrives. Chart.js measures
-  labels once, so any control handler that touches the chart before then
-  must check that it exists.
+  `lineWidth`, `alpha(color, a)` for translucent fills, and `fade(color)`
+  for the gradient area fill. Chart.js has no palette default, so give each
+  dataset its `borderColor` from `theme`. `dshViz.color('--token', alpha,
+  root)` resolves any other colour token.
 - Do not re-set gridlines, axis lines, font family, or text colour in the
   chart options: the defaults carry the card style. Override them only where
   the chart needs it (a second y axis, a dashed target line). If
   you must set a font, read it from `theme.fontFamily`; never `'inherit'` or
   a CSS variable, which canvas rejects in favour of `10px sans-serif`, and
   never below 11px.
-- Size through the container: a wrapping `div` with an explicit height and
-  `responsive: true, maintainAspectRatio: false` in the chart options. Never
-  fix the canvas width.
+- Size through the container: a wrapping `div` with an explicit height.
+  Never fix the canvas width.
 - First render animates by itself — do not disable it. Control-driven changes
-  go through `chart.data` mutation + `chart.update()`, which transitions in
-  place instead of replaying the entrance. Exactly the wanted behavior, free.
+  go through `plot.update(…)`, which transitions in place instead of
+  replaying the entrance. Exactly the wanted behavior, free.
 - Give the entrance two beats: a ~300ms fade on the chart container lets the
   axes settle first, then the data sweeps across them. One CSS `@keyframes`
   on the wrapper, as in the simulator example.
-- A gradient area fill under a single measure: build a canvas gradient from
-  `theme.alpha(theme.series[0], 0.25)` down to transparent and set it as the
-  dataset `backgroundColor` with `fill: true`.
-- Tooltips and legends come themed via the defaults above; drop the legend
-  entirely for a single series.
+- A gradient area fill under a single measure: `backgroundColor:
+  theme.fade(theme.series[0]), fill: true` (the series colour at 0.25
+  fading to transparent down the plot area).
+- Tooltips and legends come themed via the defaults above.
+- A chart library or setup `dshViz.chart` does not fit still calls
+  `dshViz.chartDefaults(Chart, root)` once and draws after
+  `dshViz.fontsReady(labelText, root)`.
 
 ## Hand-rolled SVG rules
 

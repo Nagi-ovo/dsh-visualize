@@ -31,6 +31,27 @@
  *   before each parser-inserted script), on any `dshViz.state` read, and at
  *   DOMContentLoaded for whatever had not matched yet.
  *
+ * Helpers for what nearly every card otherwise writes by hand:
+ *
+ * - `dshViz.bind(root, render)` reads the named controls under `root`
+ *   (`data-viz-param`, else `name`) into one params object — numbers from
+ *   range/number inputs and numeric option values, booleans from checkboxes
+ *   — calls `render(params)` now and on every change, and fills each
+ *   `[data-viz-out="key"]` readout from what `render` returns, else from the
+ *   param itself. Kept controls are restored before the first render. It
+ *   returns a function that renders again (after a chart becomes ready).
+ * - `dshViz.fmt(n, digits | { digits, sig, unit, percent, compact, sign,
+ *   currency, locale })` formats a number for reading, with grouping.
+ * - `dshViz.chart(canvas, config | theme => config)` applies the chart
+ *   defaults, fills in responsive sizing (and no legend for one series),
+ *   creates the chart once the fonts are ready, and returns a handle whose
+ *   `update(labels, data0, data1…)` works before that too: the first draw
+ *   then animates in with the latest data. `theme.fade(color, a?)` is the
+ *   house vertical gradient fill.
+ * - `.viz-tabs` work without script: a click selects its `.viz-tab`, and a
+ *   tab's `aria-controls` panel shows while the others hide; a `.viz-tabs`
+ *   with an id, marked or inside a `data-viz-keep` container, keeps the pick.
+ *
  * @module @nagi-ovo/dsh-visualize/viz-helper
  */
 
@@ -161,6 +182,7 @@ export function vizHelperScript(style: StyleId, chart: ChartPreset, promptToken?
       lineWidth: Number(raw('--viz-line-width', root)) || 2,
       series: [1, 2, 3, 4, 5, 6].map(function (i) { return color('--viz-series-' + i, 1, root); }),
       alpha: alpha,
+      fade: fade,
     };
     d.font.family = theme.fontFamily;
     d.font.size = theme.fontSize;
@@ -195,6 +217,17 @@ export function vizHelperScript(style: StyleId, chart: ChartPreset, promptToken?
       line.borderDash = function (ctx) { return CHART.dashes[ctx.datasetIndex % CHART.dashes.length]; };
     }
     return theme;
+  }
+  // The house area fill: the colour fading out down the plot area.
+  function fade(c, a) {
+    return function (ctx) {
+      var area = ctx.chart.chartArea;
+      if (!area) return null;
+      var g = ctx.chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+      g.addColorStop(0, alpha(c, a === undefined ? 0.25 : a));
+      g.addColorStop(1, alpha(c, 0));
+      return g;
+    };
   }
   function fontsReady(text, root) {
     var fonts = document.fonts;
@@ -324,9 +357,119 @@ export function vizHelperScript(style: StyleId, chart: ChartPreset, promptToken?
     }
   }).observe(document, { childList: true, subtree: true });
   document.addEventListener('DOMContentLoaded', function () { loaded = true; restore(); });
+  var formats = {};
+  function fmt(n, o) {
+    if (typeof n !== 'number' || !isFinite(n)) return n === null || n !== n ? '\\u2014' : String(n);
+    o = typeof o === 'number' ? { digits: o } : o || {};
+    var opt = { style: o.percent ? 'percent' : o.currency ? 'currency' : 'decimal' };
+    if (o.currency) opt.currency = o.currency;
+    if (o.compact) opt.notation = 'compact';
+    if (o.sign) opt.signDisplay = 'exceptZero';
+    if (o.digits !== undefined) opt.minimumFractionDigits = opt.maximumFractionDigits = o.digits;
+    else if (o.sig !== undefined) opt.maximumSignificantDigits = o.sig;
+    else if (!o.currency) {
+      var m = Math.abs(o.percent ? n * 100 : n);
+      if (m >= 1 || m === 0) opt.maximumFractionDigits = o.percent || o.compact ? 1 : 2;
+      else opt.maximumSignificantDigits = 2;
+    }
+    var key = (o.locale || '') + JSON.stringify(opt);
+    var f = formats[key] || (formats[key] = new Intl.NumberFormat(o.locale, opt));
+    return f.format(n) + (o.unit || '');
+  }
+  var NUMERIC = /^-?(\\d+\\.?\\d*|\\.\\d+)(e[+-]?\\d+)?$/i;
+  function bind(root, render) {
+    root = typeof root === 'string' ? document.querySelector(root) : root;
+    if (!loaded) restore();
+    var last = null;
+    function params() {
+      var p = {};
+      root.querySelectorAll(FIELDS).forEach(function (el) {
+        var name = el.getAttribute('data-viz-param') || el.name;
+        if (!name || SKIP.test(el.type) || (el.type === 'radio' && !el.checked)) return;
+        var v = valueOf(el);
+        if (el.type === 'range' || el.type === 'number') v = v === '' ? null : Number(v);
+        else if ((el.tagName === 'SELECT' || el.type === 'radio') && NUMERIC.test(v)) v = Number(v);
+        p[name] = v;
+      });
+      return p;
+    }
+    function run(force) {
+      var p = params(), json = JSON.stringify(p);
+      if (force !== true && json === last) return p;
+      last = json;
+      var out = render(p) || {};
+      root.querySelectorAll('[data-viz-out]').forEach(function (el) {
+        var k = el.getAttribute('data-viz-out'), v = own(out, k) ? out[k] : p[k];
+        if (v !== undefined) el.textContent = typeof v === 'number' ? fmt(v) : String(v);
+      });
+      return p;
+    }
+    root.addEventListener('input', run);
+    root.addEventListener('change', run);
+    run(true);
+    return function () { return run(true); };
+  }
+  function chart(target, config, root) {
+    var canvas = typeof target === 'string' ? document.querySelector(target) : target;
+    root = root || canvas.parentNode;
+    var theme = chartDefaults(Chart, root);
+    var cfg = typeof config === 'function' ? config(theme) : config;
+    var data = cfg.data || (cfg.data = {});
+    var sets = data.datasets || (data.datasets = []);
+    var options = cfg.options || (cfg.options = {});
+    if (options.responsive === undefined) options.responsive = true;
+    if (options.maintainAspectRatio === undefined) options.maintainAspectRatio = false;
+    var plugins = options.plugins || (options.plugins = {});
+    if (sets.length === 1 && !plugins.legend) plugins.legend = { display: false };
+    function put(args) {
+      var into = handle.chart ? handle.chart.data : data;
+      if (args[0] !== undefined) into.labels = args[0];
+      for (var i = 1; i < args.length; i++) if (into.datasets[i - 1]) into.datasets[i - 1].data = args[i];
+    }
+    var handle = {
+      chart: null,
+      theme: theme,
+      update: function () {
+        put(arguments);
+        if (handle.chart) handle.chart.update();
+        return handle;
+      },
+    };
+    var text = (data.labels || []).concat(sets.map(function (d) { return d.label || ''; })).join(' ');
+    handle.ready = fontsReady(text, root).then(function () {
+      handle.chart = new Chart(canvas, cfg);
+      return handle.chart;
+    });
+    return handle;
+  }
+  function selectTab(list, tab, save) {
+    [].forEach.call(list.querySelectorAll('.viz-tab'), function (t, i) {
+      var on = t === tab, panel = document.getElementById(t.getAttribute('aria-controls') || '');
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (panel) panel.hidden = !on;
+      if (on && save && list.id && list.closest(KEEP)) setState('tab:' + list.id, i);
+    });
+  }
+  document.addEventListener('click', function (event) {
+    var tab = event.target.closest && event.target.closest('.viz-tab');
+    var list = tab && tab.closest('.viz-tabs');
+    if (list && !event.defaultPrevented) selectTab(list, tab, true);
+  });
+  // Panels follow the selected tab from the start; a kept pick is clicked
+  // back, so the card's own tab handlers run as for the reader's click.
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.viz-tabs').forEach(function (list) {
+      var tabs = list.querySelectorAll('.viz-tab');
+      var kept = list.id && list.closest(KEEP) ? saved['tab:' + list.id] : undefined;
+      if (typeof kept === 'number' && tabs[kept]) return tabs[kept].click();
+      var on = list.querySelector('.viz-tab[aria-selected="true"]') || tabs[0];
+      if (on) selectTab(list, on, false);
+    });
+  });
   window.dshViz = {
     style: STYLE, color: color, chartDefaults: chartDefaults, fontsReady: fontsReady,
     canPrompt: PROMPT_TOKEN !== null, prompt: prompt,
+    bind: bind, fmt: fmt, chart: chart,
     state: {
       get: getState,
       set: function (key, value) { return setState(String(key), value); },

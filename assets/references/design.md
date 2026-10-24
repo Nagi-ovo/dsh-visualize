@@ -20,8 +20,8 @@ says otherwise, the style wins.
   caused. Decorative motion — pulsing, looping, sliding for its own sake —
   ages in seconds. Honor `prefers-reduced-motion`.
 - Format numbers for reading: thousands separators, a unit, a stable number
-  of decimals, `font-variant-numeric: tabular-nums` anywhere digits change
-  in place.
+  of decimals (`dshViz.fmt` does all three), `font-variant-numeric:
+  tabular-nums` anywhere digits change in place.
 - The initial state is already the answer: sensible defaults, a drawn curve,
   a populated grid — never an empty canvas waiting for input.
 - Cut structure that carries no data: gridlines you don't read, borders that
