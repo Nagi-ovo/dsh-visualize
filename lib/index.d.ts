@@ -142,12 +142,20 @@ interface Config {
    * {@link readStyle}, never once at startup.
    */
   style: StyleSetting;
+  /**
+   * Same-turn self-repair (see self-repair.ts): when a turn is about to end
+   * with a failed or broken card, or with card markup pasted into the reply
+   * instead of rendered, steer one short correction into the same turn.
+   * Default on (absent reads as on); hosts without the stop boundary ignore it.
+   */
+  selfRepair?: boolean;
 }
 /** Schemastery configuration validated by the Loader. */
 declare const Config: z<Config>;
 /**
- * Register the tool, the bundled skill provider, the page config, and the
- * style-file route of the settings page.
+ * Register the tool, the bundled skill provider, the page config, the
+ * style-file route of the settings page, the image route, and the same-turn
+ * self-repair.
  * @param ctx - registrant context.
  * @param config - validated deployment configuration.
  */

@@ -19,6 +19,7 @@ import { readStyle, styleFieldSchema, type StyleSetting } from './style-setting.
 import { handleStyleFiles, styleFilesHost } from './style-files.ts'
 import { IMAGE_ROUTE_PATH } from './fragment.ts'
 import { handleImageRequest, storeRoot } from './storage.ts'
+import { installSelfRepair } from './self-repair.ts'
 
 export { VISUALIZE_TOOL_NAME } from './tool.ts'
 export { visualizeMetaFrom, type VisualizeMeta, type VisualizeMode } from './fragment.ts'
@@ -48,17 +49,26 @@ export interface Config {
    * {@link readStyle}, never once at startup.
    */
   style: StyleSetting
+  /**
+   * Same-turn self-repair (see self-repair.ts): when a turn is about to end
+   * with a failed or broken card, or with card markup pasted into the reply
+   * instead of rendered, steer one short correction into the same turn.
+   * Default on (absent reads as on); hosts without the stop boundary ignore it.
+   */
+  selfRepair?: boolean
 }
 
 /** Schemastery configuration validated by the Loader. */
 export const Config: z<Config> = z.object({
   maxFragmentBytes: z.natural().default(1_000_000),
   style: styleFieldSchema(),
+  selfRepair: z.boolean().default(true).description('Same-turn self-repair · 同回合自我修复'),
 }) as unknown as z<Config>
 
 /**
- * Register the tool, the bundled skill provider, the page config, and the
- * style-file route of the settings page.
+ * Register the tool, the bundled skill provider, the page config, the
+ * style-file route of the settings page, the image route, and the same-turn
+ * self-repair.
  * @param ctx - registrant context.
  * @param config - validated deployment configuration.
  */
@@ -81,6 +91,7 @@ export function apply(ctx: Context, config: Config): void {
   injectPageConfig(ctx, style)
   registerStyleFiles(ctx)
   declineGeneratedSettingsPage(ctx)
+  if (config.selfRepair !== false) installSelfRepair(ctx)
 }
 
 /** The structured index row this plugin contributes (see `@deepseek-ai/dsh-host-webserver`). */
