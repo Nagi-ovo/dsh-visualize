@@ -141,6 +141,11 @@ export const LINT_RULES = {
     fix: 'for a workspace file write data-viz-src="<path relative to the workspace root>" instead of src; '
       + 'the tool reads the file and embeds it in the card',
   },
+  VZ108: {
+    severity: 'warn',
+    message: 'browser storage, which throws inside the sandboxed card and stops the script',
+    fix: 'keep control values with data-viz-keep and other choices with dshViz.state.set(key, value) / dshViz.state.get(key, fallback)',
+  },
   VZ199: {
     severity: 'warn',
     message: 'a lint stage failed and was skipped, so its rules were not checked',
@@ -1233,11 +1238,15 @@ function nextChar(src: string, pos: number): string {
   return src[i] ?? ''
 }
 
-/** VZ007, VZ009 (JS side), VZ010, VZ104, and colour-bearing JS style writes. */
+/** VZ007, VZ009 (JS side), VZ010, VZ104, VZ108, and colour-bearing JS style writes. */
 function checkScripts(doc: Doc, sink: FindingSink): void {
   const { js, src } = doc
   checkGlobalApis(doc, sink)
   for (const m of js.matchAll(/\.\s*style\s*\.\s*colorScheme\s*=(?!=)/gu)) sink.add('VZ009', m.index, m[0].length, 'style.colorScheme')
+  // The frame has an opaque origin: these throw a SecurityError on access.
+  for (const m of js.matchAll(/(?<![\w$])(?:localStorage|sessionStorage|indexedDB)(?![\w$])|\bdocument\s*\.\s*cookie(?![\w$])/gu)) {
+    sink.add('VZ108', m.index, m[0].length, m[0].replaceAll(/\s+/gu, ''))
+  }
 
   for (const m of js.matchAll(/\bChart\s*\.\s*defaults\s*\.\s*font\s*\.\s*family\s*=(?!=)/gu)) {
     const s = stringAt(doc, m.index + m[0].length)

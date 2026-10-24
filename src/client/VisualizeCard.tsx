@@ -33,6 +33,12 @@
  * frame's `dshViz.prompt(text)` lands in the composer as a draft, behind the
  * parent-side gates in prompt-bridge.ts. New-window tabs and thumbnails never
  * relay prompts.
+ *
+ * State: a settled in-chat frame's `dshViz.state` and `data-viz-keep`
+ * changes are stored per card (card-state.ts) and baked into the next
+ * document built for that card, so a reload, a reopened session or a patch
+ * starts where the reader left it. Thumbnails and new-window tabs start from
+ * the saved state but save nothing; the streaming preview has none.
  */
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
@@ -44,6 +50,7 @@ import { buildWindowDoc, FRAME_SANDBOX } from '../window-doc.ts'
 import { resolveTheme } from './theme.ts'
 import { liveStyle, noteSettledStyle } from './style.ts'
 import { useCardImages } from './images.ts'
+import { cardStateKey, cardStates, readStateMessage } from './card-state.ts'
 
 /** Iframe height bounds; content beyond the cap scrolls inside the frame. */
 const MIN_HEIGHT = 48
@@ -107,8 +114,10 @@ const openStyle: CSSProperties = {
  * reloaded, and the browser frees it when the chat page unloads.
  * @param meta - the card to open.
  * @param callId - correlation token base for the frame's height reports.
+ * @param stateKey - the card's saved-state key; the tab starts from that
+ *   state but, with no card behind it, saves nothing.
  */
-export function openInWindow(meta: VisualizeMeta, callId: string): void {
+export function openInWindow(meta: VisualizeMeta, callId: string, stateKey?: string): void {
   const { themeVars, colorScheme } = resolveTheme()
   const variant = variantOf(meta)
   const frameDoc = buildFrameDoc({
@@ -120,6 +129,7 @@ export function openInWindow(meta: VisualizeMeta, callId: string): void {
     // Distinct from the in-chat token, so these reports never size a card.
     reportToken: `window:${callId}`,
     variant,
+    savedState: stateKey === undefined ? undefined : cardStates.read(stateKey),
   })
   const background = (variant === 'page' ? themeVars.page : themeVars.card) ?? ''
   const page = buildWindowDoc({ frameDoc, title: meta.title, colorScheme, background, variant })
@@ -226,25 +236,67 @@ interface FrameDoc {
   colorScheme: 'light' | 'dark'
 }
 
+/** Which saved state a frame document starts from, and whether it saves changes. */
+interface FrameStateUse {
+  key: string
+  saves: boolean
+}
+
 /**
  * The frame document for one card, rebuilt on theme changes.
  * @param meta - the card.
  * @param reportToken - height-report correlation token.
  * @param variant - surface the document lays out for.
  * @param promptable - whether the frame's `dshViz.prompt` is relayed.
+ * @param state - the card's saved-state key, when it has one.
  * @returns the srcdoc string and its scheme, for the iframe's own `color-scheme`.
  */
-function useFrameDoc(meta: VisualizeMeta, reportToken: string, variant: FrameVariant, promptable = false): FrameDoc {
+function useFrameDoc(
+  meta: VisualizeMeta, reportToken: string, variant: FrameVariant, promptable = false, state?: FrameStateUse,
+): FrameDoc {
   const themeTick = useThemeTick()
+  // Re-resolved as often as before (each new meta, each theme tick); themeTick
+  // is the deliberate trigger for the palette read.
+  const theme = useMemo(() => resolveTheme(), [meta, themeTick])
+  const themeKey = JSON.stringify(theme)
+  const stateKey = state?.key
+  // Saved state is read only when the document changes for its own reasons
+  // (markup, title, style, surface, theme), never because the state did:
+  // otherwise every input the frame records would rebuild and reload it.
+  const savedState = useMemo(
+    () => stateKey === undefined ? undefined : cardStates.read(stateKey),
+    [stateKey, themeKey, meta.fragment, meta.title, meta.style, variant],
+  )
+  const savesState = state?.saves === true
   return useMemo(() => {
-    const { themeVars, colorScheme } = resolveTheme()
     const doc = buildFrameDoc({
-      fragment: meta.fragment, title: meta.title, themeVars, colorScheme, reportToken, variant, style: meta.style,
-      promptable,
+      fragment: meta.fragment, title: meta.title, themeVars: theme.themeVars, colorScheme: theme.colorScheme,
+      reportToken, variant, style: meta.style, promptable, savedState, savesState,
     })
-    return { doc, colorScheme }
-    // themeTick is the deliberate re-resolution trigger for the palette read.
-  }, [meta, reportToken, variant, promptable, themeTick])
+    return { doc, colorScheme: theme.colorScheme }
+  }, [meta, reportToken, variant, promptable, theme, savedState, savesState])
+}
+
+/**
+ * Store this frame's state snapshots under the card's key. As with prompts,
+ * only messages from this very frame window count; the key is the card's,
+ * never one the message names.
+ * @param frameRef - the card's iframe.
+ * @param token - the frame's correlation token.
+ * @param stateKey - the card's saved-state key, or undefined when it saves nothing.
+ */
+function useStateRelay(frameRef: RefObject<HTMLIFrameElement | null>, token: string, stateKey: string | undefined) {
+  useEffect(() => {
+    if (stateKey === undefined) return
+    const onMessage = (event: MessageEvent) => {
+      const frame = frameRef.current
+      if (frame === null || event.source !== frame.contentWindow) return
+      const values = readStateMessage(event.data, token)
+      if (values !== undefined) cardStates.write(stateKey, values)
+    }
+    addEventListener('message', onMessage)
+    return () => removeEventListener('message', onMessage)
+  }, [frameRef, token, stateKey])
 }
 
 /**
@@ -275,11 +327,21 @@ function usePromptRelay(frameRef: RefObject<HTMLIFrameElement | null>, token: st
   }, [frameRef, token, prompt])
 }
 
+/** What every surface of one card shares. */
+interface FrameProps {
+  meta: VisualizeMeta
+  callId: string
+  prompt?: PromptSink | undefined
+  /** The card's saved-state key ({@link cardStateKey}); absent for a card still streaming. */
+  stateKey?: string | undefined
+}
+
 /** The sandboxed frame, sized to its content's reported height up to the mode's cap. */
-function SizedFrame({ meta, callId, prompt }: { meta: VisualizeMeta; callId: string; prompt?: PromptSink | undefined }) {
+function SizedFrame({ meta, callId, prompt, stateKey }: FrameProps) {
   const [height, setHeight] = useState(MIN_HEIGHT)
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   usePromptRelay(frameRef, callId, prompt)
+  useStateRelay(frameRef, callId, stateKey)
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const data: unknown = event.data
@@ -292,7 +354,9 @@ function SizedFrame({ meta, callId, prompt }: { meta: VisualizeMeta; callId: str
     addEventListener('message', onMessage)
     return () => removeEventListener('message', onMessage)
   }, [callId, meta.mode])
-  const { doc, colorScheme } = useFrameDoc(meta, callId, variantOf(meta), prompt !== undefined)
+  const { doc, colorScheme } = useFrameDoc(
+    meta, callId, variantOf(meta), prompt !== undefined, stateKey === undefined ? undefined : { key: stateKey, saves: true },
+  )
   return (
     <iframe
       ref={frameRef}
@@ -312,11 +376,11 @@ function SizedFrame({ meta, callId, prompt }: { meta: VisualizeMeta; callId: str
  * turn tail, replay — goes through here, so a page card is a launcher in all
  * of them.
  */
-export function Frame({ meta: persisted, callId, prompt }: { meta: VisualizeMeta; callId: string; prompt?: PromptSink | undefined }) {
+export function Frame({ meta: persisted, callId, prompt, stateKey }: FrameProps) {
   // Every surface below builds from this meta, images already embedded.
   const meta = useCardImages(persisted)
   if (meta === undefined) return <div style={headerStyle}>{persisted.title} · {loadingImagesLabel()}</div>
-  if (meta.mode === 'page') return <PageLauncher meta={meta} callId={callId} prompt={prompt} />
+  if (meta.mode === 'page') return <PageLauncher meta={meta} callId={callId} prompt={prompt} stateKey={stateKey} />
   const label = openLabel()
   return (
     <div style={cardStyle}>
@@ -328,12 +392,12 @@ export function Frame({ meta: persisted, callId, prompt }: { meta: VisualizeMeta
           style={openStyle}
           aria-label={label}
           title={label}
-          onClick={() => openInWindow(meta, callId)}
+          onClick={() => openInWindow(meta, callId, stateKey)}
         >
           <OpenIcon />
         </button>
       </div>
-      <SizedFrame meta={meta} callId={callId} prompt={prompt} />
+      <SizedFrame meta={meta} callId={callId} prompt={prompt} stateKey={stateKey} />
     </div>
   )
 }
@@ -420,7 +484,7 @@ function launcherLabels() {
  * stay out of the frame, so it never takes a click, a scroll, or a tab stop;
  * a click on the thumbnail opens the page like the button does.
  */
-function PageThumbnail({ meta, callId, onOpen }: { meta: VisualizeMeta; callId: string; onOpen: (() => void) | undefined }) {
+function PageThumbnail({ meta, callId, stateKey, onOpen }: FrameProps & { onOpen: (() => void) | undefined }) {
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const [width, setWidth] = useState(0)
   useEffect(() => {
@@ -434,7 +498,10 @@ function PageThumbnail({ meta, callId, onOpen }: { meta: VisualizeMeta; callId: 
     return () => observer.disconnect()
   }, [])
   // A distinct token: its height reports must never size another frame.
-  const { doc, colorScheme } = useFrameDoc(meta, `thumb:${callId}`, 'page')
+  // It shows the saved state but, inert, never changes it.
+  const { doc, colorScheme } = useFrameDoc(
+    meta, `thumb:${callId}`, 'page', false, stateKey === undefined ? undefined : { key: stateKey, saves: false },
+  )
   const scale = width > 0 ? width / THUMB_VIEWPORT_WIDTH : 0.5
   return (
     <div ref={wrapRef} style={thumbStyle} aria-hidden="true" onClick={onOpen}>
@@ -469,16 +536,16 @@ function PageThumbnail({ meta, callId, onOpen }: { meta: VisualizeMeta; callId: 
  * tab opened without a user gesture is a blocked popup. Where no tab can be
  * opened at all, the page renders in place as a regular card.
  */
-function PageLauncher({ meta, callId, prompt }: { meta: VisualizeMeta; callId: string; prompt: PromptSink | undefined }) {
+function PageLauncher({ meta, callId, prompt, stateKey }: FrameProps) {
   const opens = canOpenWindow()
   const [expanded, setExpanded] = useState(!opens)
   const labels = launcherLabels()
-  const open = opens ? () => openInWindow(meta, callId) : undefined
+  const open = opens ? () => openInWindow(meta, callId, stateKey) : undefined
   return (
     <div style={launcherStyle} data-visualize-launcher="">
       {expanded
-        ? <SizedFrame meta={meta} callId={callId} prompt={prompt} />
-        : <PageThumbnail meta={meta} callId={callId} onOpen={open} />}
+        ? <SizedFrame meta={meta} callId={callId} prompt={prompt} stateKey={stateKey} />
+        : <PageThumbnail meta={meta} callId={callId} stateKey={stateKey} onOpen={open} />}
       <div style={launcherBarStyle}>
         <div style={launcherTextStyle} title={meta.path === '' ? meta.title : meta.path}>
           <div style={launcherTitleStyle}>{meta.title}</div>
@@ -506,7 +573,7 @@ function PageLauncher({ meta, callId, prompt }: { meta: VisualizeMeta; callId: s
  * the fragment in the call's own arguments for nested dispatches — mounts
  * the frame. Only a settled card relays prompts.
  */
-export function VisualizeCard({ callId, block, visualizePrompt }: ToolCallViewProps & VisualizePromptInjected) {
+export function VisualizeCard({ callId, block, visualizePrompt, visualizeSession }: ToolCallViewProps & VisualizePromptInjected) {
   // dsh 0.1.7 adds a preparing phase whose block carries no arguments yet.
   const argsRaw = 'kind' in block ? block.call?.argsRaw : 'argsRaw' in block ? block.argsRaw : undefined
   if (!('kind' in block)) {
@@ -526,11 +593,26 @@ export function VisualizeCard({ callId, block, visualizePrompt }: ToolCallViewPr
     // show the durable result text instead of guessing at markup.
     return <div style={headerStyle}>{firstResultLine(block.content)}</div>
   }
-  return <Frame meta={meta} callId={callId} prompt={visualizePrompt} />
+  return <Frame meta={meta} callId={callId} prompt={visualizePrompt} stateKey={cardStateKey(visualizeSession, meta.path, callId)} />
 }
 
-/** Props a slot registration injects so cards can reach the session's composer. */
+/** Props a slot registration injects so cards can reach their session. */
 export interface VisualizePromptInjected {
   /** Composer sink for this session; absent on hosts without a session input. */
   visualizePrompt?: PromptSink | undefined
+  /** The session the card renders in, part of its saved-state key; absent where the host passes none. */
+  visualizeSession?: string | undefined
+}
+
+/**
+ * What a slot registration injects for one session.
+ * @param prompt - the session's composer sink.
+ * @param sessionId - the session id the registration's inject received.
+ * @returns the injected props.
+ */
+export function sessionInjection(prompt: PromptSink | undefined, sessionId: unknown): VisualizePromptInjected {
+  return {
+    visualizePrompt: prompt,
+    visualizeSession: typeof sessionId === 'string' && sessionId !== '' ? sessionId : undefined,
+  }
 }

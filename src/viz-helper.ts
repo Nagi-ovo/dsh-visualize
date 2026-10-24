@@ -17,6 +17,19 @@
  *   composer as a draft the reader sends (never sent by itself); it returns
  *   false where the card cannot relay it. `dshViz.canPrompt` says up front
  *   whether it can, so a fragment hides prompt-only controls otherwise.
+ * - `dshViz.state.get(key, fallback?)` / `.set(key, value)` / `.clear()`
+ *   keep JSON values for this card across reloads. The saved values are
+ *   baked into the document, so they are readable before any fragment script
+ *   runs; each change posts the whole map (at most {@link CARD_STATE_MAX_CHARS}
+ *   as JSON) to the card, which stores it (client/card-state.ts). Where the
+ *   card saves nothing (thumbnails, a new tab, the streaming preview) the API
+ *   still works for the life of the document.
+ * - Controls marked `data-viz-keep` (or inside a marked container) are saved
+ *   on `input`/`change` and restored once on load, with their `input` and
+ *   `change` events fired so the fragment's own handlers redraw. Restoring
+ *   runs on every parse step (a mutation observer, which browsers deliver
+ *   before each parser-inserted script), on any `dshViz.state` read, and at
+ *   DOMContentLoaded for whatever had not matched yet.
  *
  * @module @nagi-ovo/dsh-visualize/viz-helper
  */
@@ -26,21 +39,52 @@ import type { ChartPreset, StyleId } from './style.ts'
 /** Wire type of the frame→card composer prompt (`dshViz.prompt`). */
 export const PROMPT_MESSAGE_TYPE = 'dsh-visualize:prompt'
 
+/** Wire type of the frame→card saved-state snapshot (`dshViz.state`). */
+export const STATE_MESSAGE_TYPE = 'dsh-visualize:state'
+
+/** Largest saved state one card keeps, as JSON characters. */
+export const CARD_STATE_MAX_CHARS = 16 * 1024
+
+/** A card's saved state: JSON values by key. */
+export type CardState = Record<string, unknown>
+
+/** What the frame starts its `dshViz.state` from, and whether changes are saved. */
+export interface FrameState {
+  /** Values saved by an earlier load of this card; already JSON-clean. */
+  values?: CardState | undefined
+  /** Correlation token for state messages, or undefined where nothing is saved. */
+  token?: string | undefined
+}
+
+/**
+ * JSON for an inline `<script>`: `<`, `>`, `&` and the two JS line
+ * separators are escaped, so no value can close the script, open a comment,
+ * or break the statement, whatever text the reader typed into a control.
+ * @param value - a JSON-serialisable value.
+ * @returns the escaped JSON text.
+ */
+export function scriptJson(value: unknown): string {
+  return JSON.stringify(value).replace(/[<>&\u2028\u2029]/gu, ch => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`)
+}
+
 /**
  * The helper's inline script body for one card style.
  * @param style - the card's style id, exposed as `dshViz.style`.
  * @param chart - the style's Chart.js knobs beyond its CSS tokens.
  * @param promptToken - correlation token for `dshViz.prompt` messages, or
  *   undefined where the embedding card relays no prompts.
+ * @param state - saved values to start from, and the token to save under.
  * @returns the script body.
  */
-export function vizHelperScript(style: StyleId, chart: ChartPreset, promptToken?: string): string {
+export function vizHelperScript(style: StyleId, chart: ChartPreset, promptToken?: string, state: FrameState = {}): string {
   // JSON of plugin-owned constants; `<` cannot occur, so the script cannot close early.
-  return `
+  return compact(`
 (function () {
   var STYLE = ${JSON.stringify(style)};
   var CHART = ${JSON.stringify(chart)};
   var PROMPT_TOKEN = ${JSON.stringify(promptToken ?? null)};
+  var STATE_TOKEN = ${JSON.stringify(state.token ?? null)};
+  var saved = ${scriptJson(state.values ?? {})};
   var GENERIC = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-[a-z-]+|-apple-system|emoji|math)$/;
   var paint = null;
   function host(root) { return root || document.body || document.documentElement; }
@@ -173,10 +217,133 @@ export function vizHelperScript(style: StyleId, chart: ChartPreset, promptToken?
     parent.postMessage({ type: ${JSON.stringify(PROMPT_MESSAGE_TYPE)}, token: PROMPT_TOKEN, text: text }, '*');
     return true;
   }
+  // Saved state. Every write goes through JSON, so what the card stores is
+  // what a reload gets back; the card enforces the same cap on its side.
+  var posted = JSON.stringify(saved);
+  function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+  function commit(next) {
+    var json;
+    try { json = JSON.stringify(next); } catch (e) { return false; }
+    if (json.length > ${CARD_STATE_MAX_CHARS}) return false;
+    saved = JSON.parse(json);
+    if (STATE_TOKEN !== null && json !== posted) {
+      posted = json;
+      parent.postMessage({ type: ${JSON.stringify(STATE_MESSAGE_TYPE)}, token: STATE_TOKEN, state: saved }, '*');
+    }
+    return true;
+  }
+  function setState(key, value) {
+    var next = Object.create(null);
+    for (var k in saved) if (own(saved, k)) next[k] = saved[k];
+    if (value === undefined) delete next[key]; else next[key] = value;
+    return commit(next);
+  }
+  function getState(key, fallback) {
+    if (!loaded) restore();
+    return own(saved, key) ? JSON.parse(JSON.stringify(saved[key])) : fallback;
+  }
+  var KEEP = '[data-viz-keep]', FIELDS = 'input,select,textarea';
+  var SKIP = /^(button|submit|reset|image|file|password|hidden)$/;
+  var settled = Object.create(null), loaded = false;
+  function keyOf(el) {
+    if (SKIP.test(el.type)) return null;
+    var name = el.getAttribute('data-viz-keep') || (el.type === 'radio' ? el.name : el.id || el.name);
+    return name ? 'keep:' + name : null;
+  }
+  function valueOf(el) {
+    if (el.type === 'checkbox') return el.checked;
+    if (el.type === 'radio') return el.checked ? el.value : undefined;
+    if (el.multiple) return [].filter.call(el.options, function (o) { return o.selected; }).map(function (o) { return o.value; });
+    return el.value;
+  }
+  // Put a saved value into a control: the element whose value changed, false
+  // when it already holds it, null when it cannot take it (yet).
+  function put(el, v) {
+    if (el.type === 'checkbox') {
+      if (typeof v !== 'boolean') return null;
+      if (el.checked === v) return false;
+      el.checked = v;
+      return el;
+    }
+    if (el.type === 'radio') {
+      var hit = [].filter.call(document.getElementsByName(el.name), function (r) { return r.type === 'radio' && r.value === v; })[0];
+      if (!hit) return null;
+      if (hit.checked) return false;
+      hit.checked = true;
+      return hit;
+    }
+    if (el.multiple) {
+      if (!Array.isArray(v)) return null;
+      var changed = false;
+      [].forEach.call(el.options, function (o) {
+        var on = v.indexOf(o.value) !== -1;
+        if (o.selected !== on) { o.selected = on; changed = el; }
+      });
+      return changed;
+    }
+    if (typeof v !== 'string') return null;
+    if (el.tagName === 'SELECT' && ![].some.call(el.options, function (o) { return o.value === v; })) return null;
+    if (el.value === v) return false;
+    el.value = v;
+    return el;
+  }
+  function fire(el) {
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  // Each key is restored once, by the first control that can take its value;
+  // until the document has loaded, a select or radio group still parsing may
+  // match later.
+  function restore() {
+    document.querySelectorAll(KEEP).forEach(function (box) {
+      (box.matches(FIELDS) ? [box] : [].slice.call(box.querySelectorAll(FIELDS))).forEach(function (el) {
+        var key = keyOf(el);
+        if (key === null || settled[key]) return;
+        var done = own(saved, key) ? put(el, saved[key]) : false;
+        if (done === null && !loaded) return;
+        settled[key] = true;
+        if (done) fire(done);
+      });
+    });
+  }
+  function save(event) {
+    var el = event.target;
+    if (!el || !el.matches || !el.matches(FIELDS) || !el.closest(KEEP)) return;
+    var key = keyOf(el), value = valueOf(el);
+    if (key !== null && value !== undefined) setState(key, value);
+  }
+  addEventListener('input', save, true);
+  addEventListener('change', save, true);
+  new MutationObserver(function (records) {
+    if (!loaded) return restore();
+    for (var i = 0; i < records.length; i++) {
+      for (var j = 0; j < records[i].addedNodes.length; j++) {
+        var n = records[i].addedNodes[j];
+        if (n.nodeType === 1 && (n.closest(KEEP) || n.querySelector(KEEP))) return restore();
+      }
+    }
+  }).observe(document, { childList: true, subtree: true });
+  document.addEventListener('DOMContentLoaded', function () { loaded = true; restore(); });
   window.dshViz = {
     style: STYLE, color: color, chartDefaults: chartDefaults, fontsReady: fontsReady,
     canPrompt: PROMPT_TOKEN !== null, prompt: prompt,
+    state: {
+      get: getState,
+      set: function (key, value) { return setState(String(key), value); },
+      clear: function () { return commit({}); },
+    },
   };
 })();
-`
+`)
+}
+
+/**
+ * Drop indentation and whole-line comments from the helper: it ships in
+ * every card's document, and its source holds no multi-line literal either
+ * could change.
+ * @param script - the helper source.
+ * @returns the script as shipped.
+ */
+function compact(script: string): string {
+  return script.replace(/^[ \t]+/gmu, '').replace(/^\/\/.*\n/gmu, '')
 }

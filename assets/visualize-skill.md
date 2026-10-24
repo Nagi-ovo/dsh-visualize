@@ -96,8 +96,9 @@ page, its `summary`, or the launcher loses its caption), and one exact
 - A refused patch tells you what the card actually contains at the site you
   aimed at. Correct `old_str` from that and retry in the same reply rather
   than re-rendering blind.
-- The card reloads on every change, so anything the user typed, dragged, or
-  scrolled inside it resets. Batch corrections instead of trickling them.
+- The card reloads on every change. What it keeps (see "Keeping what the
+  user set") survives; scroll, hover and anything else resets. Batch
+  corrections instead of trickling them.
 - A page tab the user already opened keeps its old version; after patching
   a page, tell them to open it again.
 
@@ -169,6 +170,27 @@ embeds the image when you call it:
 - An `update` reuses fetched URL images and reads workspace files again, so
   after regenerating a figure under the same name, any patch shows the new
   one.
+
+## Keeping what the user set
+
+A card reloads when the page refreshes, the session is reopened, or you
+patch it. Keep the choices the user made so it comes back as they left it:
+
+- Put `data-viz-keep` on a container (usually your root) and every control
+  inside with an `id` or `name` is saved on `input` / `change` and restored
+  on load; radios share a `name`. A single control takes the attribute
+  itself, optionally with a key: `data-viz-keep="speed"`.
+- Restoring fires the control's `input` and `change` events, so handlers
+  you wired redraw. Write controls before the script that reads them.
+- Other state the user chose — a selected item, a step, a zoom — goes
+  through `dshViz.state.set(key, value)` and
+  `dshViz.state.get(key, fallback)`: JSON values, under 16 KB per card,
+  readable synchronously the moment your script runs.
+- Keep choices, not results: never data, computed output, or animation
+  progress. A reset control calls `dshViz.state.clear()` and puts the
+  defaults back.
+- A patch keeps the saved state. Rename a key when a patch changes what it
+  means.
 
 ## Handing back to the conversation
 

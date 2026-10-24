@@ -157,6 +157,8 @@ describe('registrations', () => {
     for (const name of ['tool.call.toolview', 'conversation.chat.turnTail']) {
       const injected = options.get(name)?.inject?.('s1')
       expect(typeof injected?.visualizePrompt, name).toBe('function')
+      // The session id also keys each card's saved state.
+      expect(injected?.visualizeSession, name).toBe('s1')
     }
     // No session, no sink: the card builds its frame with canPrompt false.
     expect(options.get('tool.call.toolview')?.inject?.(undefined).visualizePrompt).toBeUndefined()

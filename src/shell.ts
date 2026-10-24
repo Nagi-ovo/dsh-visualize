@@ -16,7 +16,7 @@
 
 import { FRAME_CSS, PAGE_CSS } from './frame-css.ts'
 import { DEFAULT_STYLE, STYLES, type StyleId } from './style.ts'
-import { vizHelperScript } from './viz-helper.ts'
+import { vizHelperScript, type CardState } from './viz-helper.ts'
 
 /** CDN origins a fragment may load static resources from. */
 export const RESOURCE_ORIGINS = [
@@ -53,7 +53,7 @@ export const HEIGHT_MESSAGE_TYPE = 'dsh-visualize:height'
 /** Wire type of the card→frame streaming fragment update message. */
 export const STREAM_MESSAGE_TYPE = 'dsh-visualize:stream'
 
-export { PROMPT_MESSAGE_TYPE } from './viz-helper.ts'
+export { PROMPT_MESSAGE_TYPE, STATE_MESSAGE_TYPE } from './viz-helper.ts'
 
 /** Inputs to one frame document assembly. */
 export interface FrameDocOptions {
@@ -94,6 +94,19 @@ export interface FrameDocOptions {
    * off, and the frame then reports `dshViz.canPrompt === false`.
    */
   promptable?: boolean
+  /**
+   * Values the card saved through `dshViz.state` and `data-viz-keep` on an
+   * earlier load, baked into the document so fragment scripts read them
+   * before anything async. Every surface that knows the card passes them; a
+   * thumbnail or a new tab thus opens where the reader left the card.
+   */
+  savedState?: CardState | undefined
+  /**
+   * Whether the embedding card stores the frame's state changes: only a
+   * settled in-chat card does. Elsewhere `dshViz.state` lives as long as the
+   * document.
+   */
+  savesState?: boolean
 }
 
 /** Surface a frame document is laid out for. */
@@ -122,7 +135,10 @@ export function buildFrameDoc(options: FrameDocOptions): string {
 ${style.fontHref === undefined ? '' : `<link rel="stylesheet" href="${escapeHtml(style.fontHref)}">\n`}<style>${FRAME_CSS}${options.variant === 'page' ? PAGE_CSS : ''}
 :root { ${rootVars} color-scheme: ${options.colorScheme}; }
 ${options.variant === 'page' ? '' : 'body { padding: 4px 2px; }'}${style.extraCss === undefined ? '' : `\n${style.extraCss}`}</style>
-<script>${vizHelperScript(style.id, style.chart, options.promptable === true ? options.reportToken : undefined)}</script>
+<script>${vizHelperScript(style.id, style.chart, options.promptable === true ? options.reportToken : undefined, {
+    values: options.savedState,
+    token: options.savesState === true ? options.reportToken : undefined,
+  })}</script>
 </head>
 <body>
 ${options.fragment}

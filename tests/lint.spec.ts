@@ -174,6 +174,18 @@ describe('VZ005 / VZ006 / VZ105 / VZ106 external resources', () => {
   })
 })
 
+describe('VZ108 browser storage', () => {
+  it('warns toward dshViz.state for storage the opaque-origin frame refuses', () => {
+    const f = only('<div id="a"></div><script>var n = localStorage.getItem("n")</script>', 'VZ108')
+    expect(f.severity).toBe('warn')
+    expect(f.fix).toContain('dshViz.state')
+    expect(codes('<div id="a"></div><script>window.sessionStorage.clear(); document.cookie = "x=1"; indexedDB.open("x")</script>'))
+      .toEqual(['VZ108', 'VZ108', 'VZ108'])
+    // Names in strings, comments and longer identifiers are not storage.
+    expect(codes('<div id="a"></div><script>var label = "localStorage"; // localStorage\nvar myLocalStorage = 1</script>')).toEqual([])
+  })
+})
+
 describe('VZ011 / VZ107 images the card cannot load', () => {
   it('VZ011: an <img src> on a blocked host is an error that points at data-viz-src', () => {
     const f = only('<img id="a" src="https://upload.wikimedia.org/a.png" alt="x">', 'VZ011')

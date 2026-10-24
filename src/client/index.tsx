@@ -14,7 +14,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
 // Type-only: pulls the `conversation.input.dock` SlotMap declaration.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { VisualizeCard } from './VisualizeCard.tsx'
+import { sessionInjection, VisualizeCard } from './VisualizeCard.tsx'
 import { StreamingPreview, streamDefinition } from './StreamingPreview.tsx'
 import { foldingSource, type FoldingHost } from './folding.ts'
 import { selectTurnCards, turnCardsDefinition, TurnCards } from './TurnCards.tsx'
@@ -60,7 +60,7 @@ function turnTailOptions(host: FoldingHost) {
     select: selectTurnCards,
     inject: (sessionId: unknown) => ({
       hooks: { visualizeFolds: folds },
-      visualizePrompt: promptSinkFor(host, sessionId),
+      ...sessionInjection(promptSinkFor(host, sessionId), sessionId),
     }),
   } as const
 }
@@ -74,12 +74,13 @@ function turnTailOptions(host: FoldingHost) {
  */
 export function apply(ctx: ClientContext): void {
   // A session-scope registration's inject receives the session id; the sink
-  // it builds lets a settled card put `dshViz.prompt` text into the composer.
+  // it builds lets a settled card put `dshViz.prompt` text into the composer,
+  // and the id keys the card's saved state.
   ctx.slots.inject('tool.call.toolview', () => ctx.slots.register(
     {
       name: 'tool.call.toolview',
       key: 'visualize',
-      inject: (sessionId: unknown) => ({ visualizePrompt: promptSinkFor(ctx, sessionId) }),
+      inject: (sessionId: unknown) => sessionInjection(promptSinkFor(ctx, sessionId), sessionId),
     },
     VisualizeCard,
   ))

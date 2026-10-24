@@ -22,6 +22,7 @@ import type { HostObservable, InjectFace, PropsRuntime } from '@deepseek-ai/dsh-
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import { visualizeMetaFrom, type VisualizeMeta } from '../fragment.ts'
 import { Frame, type VisualizePromptInjected } from './VisualizeCard.tsx'
+import { cardStateKey } from './card-state.ts'
 
 /** Definition kind and Turn data key; namespaced by package to stay unique. */
 export const TURN_CARDS_KEY = 'dsh-visualize'
@@ -154,7 +155,7 @@ const listStyle: CSSProperties = {
  * @param props - turn owner props plus the injected folding selector.
  * @returns the turn's cards, or null.
  */
-export function TurnCards({ turn, seq, useVisualizeFolds, visualizePrompt }: PropsRuntime<'conversation.chat.turnTail'> & TurnCardsInjected) {
+export function TurnCards({ turn, seq, useVisualizeFolds, visualizePrompt, visualizeSession }: PropsRuntime<'conversation.chat.turnTail'> & TurnCardsInjected) {
   const folds = useVisualizeFolds(value => value)
   const cards = cardsBefore(turn, seq)
   if (!folds || cards.length === 0) return null
@@ -162,8 +163,15 @@ export function TurnCards({ turn, seq, useVisualizeFolds, visualizePrompt }: Pro
     <div style={listStyle}>
       {cards.map(card => (
         // A distinct height token: the toolview frame for the same call may be
-        // mounted too (an opened fold) and reports under the bare call id.
-        <Frame key={card.callId} meta={card.meta} callId={`turn-tail:${card.callId}`} prompt={visualizePrompt} />
+        // mounted too (an opened fold) and reports under the bare call id. Both
+        // share the card's saved state.
+        <Frame
+          key={card.callId}
+          meta={card.meta}
+          callId={`turn-tail:${card.callId}`}
+          prompt={visualizePrompt}
+          stateKey={cardStateKey(visualizeSession, card.meta.path, card.callId)}
+        />
       ))}
     </div>
   )
