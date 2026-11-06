@@ -137,6 +137,20 @@ describe('page launcher', () => {
     }
   })
 
+  it('offers no tab on DSH Desktop, which denies Blob URLs', () => {
+    document.documentElement.dataset.platform = 'darwin'
+    try {
+      const page = mount(PAGE)
+      expect(page.querySelectorAll('button')).toHaveLength(0)
+      expect(page.querySelector('iframe')!.style.pointerEvents).not.toBe('none')
+      const card = mount({ ...PAGE, mode: 'inline' })
+      expect(card.querySelectorAll('button')).toHaveLength(0)
+      expect(card.querySelector('iframe')).not.toBeNull()
+    } finally {
+      delete document.documentElement.dataset.platform
+    }
+  })
+
   it('leaves inline and wide cards as they were', () => {
     const container = mount({ ...PAGE, mode: 'inline' })
     expect(container.querySelector('[data-visualize-launcher]')).toBeNull()
