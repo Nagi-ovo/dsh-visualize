@@ -20,7 +20,11 @@ DSH does not have to answer with text alone. When the model calls `visualize`, t
 
 ## Install
 
-Install from npm into DSH's `web` profile:
+**Desktop:** open **插件 (Plugins)** in the sidebar, choose **添加插件 (Add plugin)**, enter `@nagi-ovo/dsh-visualize`, then restart DSH. You can also run `dsh plugin --profile desktop add @nagi-ovo/dsh-visualize`.
+
+Desktop cannot open new windows, so cards and pages render in the conversation.
+
+**Web:** install from npm into the `web` profile:
 
 ```sh
 dsh plugin --profile web add @nagi-ovo/dsh-visualize

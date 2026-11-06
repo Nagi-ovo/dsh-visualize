@@ -20,7 +20,11 @@
 
 ## 安装
 
-推荐用 npm 装到 DSH 的 `web` profile：
+**桌面端**：打开侧边栏的「插件」→「添加插件」，填入 `@nagi-ovo/dsh-visualize`，然后重启 DSH。也可以运行 `dsh plugin --profile desktop add @nagi-ovo/dsh-visualize`。
+
+桌面端不能打开新窗口，卡片和页面都直接显示在对话里。
+
+**Web**：用 npm 装到 `web` profile：
 
 ```sh
 dsh plugin --profile web add @nagi-ovo/dsh-visualize
