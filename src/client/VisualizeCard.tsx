@@ -41,7 +41,7 @@
  * the saved state but save nothing; the streaming preview has none.
  */
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import { visualizeMetaFrom, visualizeMetaFromArgs, type VisualizeMeta } from '../fragment.ts'
 import { buildFrameDoc, HEIGHT_MESSAGE_TYPE, type FrameVariant } from '../shell.ts'
@@ -51,6 +51,7 @@ import { resolveTheme } from './theme.ts'
 import { liveStyle, noteSettledStyle } from './style.ts'
 import { useCardImages } from './images.ts'
 import { cardStateKey, cardStates, readStateMessage } from './card-state.ts'
+import { useReportShown } from './shown-cards.ts'
 
 /** Iframe height bounds; content beyond the cap scrolls inside the frame. */
 const MIN_HEIGHT = 48
@@ -593,7 +594,21 @@ export function VisualizeCard({ callId, block, visualizePrompt, visualizeSession
     // show the durable result text instead of guessing at markup.
     return <div style={headerStyle}>{firstResultLine(block.content)}</div>
   }
-  return <Frame meta={meta} callId={callId} prompt={visualizePrompt} stateKey={cardStateKey(visualizeSession, meta.path, callId)} />
+  return (
+    <ShownBox callId={callId}>
+      <Frame meta={meta} callId={callId} prompt={visualizePrompt} stateKey={cardStateKey(visualizeSession, meta.path, callId)} />
+    </ShownBox>
+  )
+}
+
+/**
+ * A settled toolview card's outer box, reporting whether a reader can see it
+ * so the turn tail does not show the same card twice.
+ */
+function ShownBox({ callId, children }: { callId: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useReportShown(ref, callId)
+  return <div ref={ref} style={{ minWidth: 0 }}>{children}</div>
 }
 
 /** Props a slot registration injects so cards can reach their session. */

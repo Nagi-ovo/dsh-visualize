@@ -6,7 +6,8 @@
  * reader's work-details mode folds (the default). A visualization is the
  * turn's output rather than its process, so this re-shows the turn's cards on
  * the turn tail, the seat the host's own deliverables use for the same
- * reason. The toolview card stays inside the fold as the call's own record.
+ * reason. The toolview card stays inside the fold as the call's own record;
+ * while a reader has that fold open, the tail skips the card (`shown-cards.ts`).
  *
  * The cards come from a state-only Conversation Definition that collects each
  * successful `visualize` result's persisted meta per turn; nothing here reads
@@ -23,6 +24,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import { visualizeMetaFrom, type VisualizeMeta } from '../fragment.ts'
 import { Frame, type VisualizePromptInjected } from './VisualizeCard.tsx'
 import { cardStateKey } from './card-state.ts'
+import { isShownInToolview, useShownToolviewVersion } from './shown-cards.ts'
 
 /** Definition kind and Turn data key; namespaced by package to stay unique. */
 export const TURN_CARDS_KEY = 'dsh-visualize'
@@ -157,7 +159,9 @@ const listStyle: CSSProperties = {
  */
 export function TurnCards({ turn, seq, useVisualizeFolds, visualizePrompt, visualizeSession }: PropsRuntime<'conversation.chat.turnTail'> & TurnCardsInjected) {
   const folds = useVisualizeFolds(value => value)
-  const cards = cardsBefore(turn, seq)
+  useShownToolviewVersion()
+  // A card whose toolview copy is on screen (an opened fold) is skipped.
+  const cards = cardsBefore(turn, seq).filter(card => !isShownInToolview(card.callId))
   if (!folds || cards.length === 0) return null
   return (
     <div style={listStyle}>

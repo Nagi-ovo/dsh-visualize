@@ -9,15 +9,16 @@
  * preference.
  */
 
-import { act, type ComponentType } from 'react'
+import { act, useRef, type ComponentType } from 'react'
 import { createRoot } from 'react-dom/client'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { apply } from '../src/client/index.tsx'
 import { configFormsFolds, foldingSource, settingsScopeFolds } from '../src/client/folding.ts'
 import {
   cardsBefore, foldCard, selectTurnCards, TURN_CARDS_KEY, turnCardsDefinition, TurnCards, type TurnCard,
 } from '../src/client/TurnCards.tsx'
 import { STREAM_KEY } from '../src/client/StreamingPreview.tsx'
+import { useReportShown } from '../src/client/shown-cards.ts'
 import type { VisualizeMeta } from '../src/fragment.ts'
 
 /** A well-formed persisted descriptor. */
@@ -221,5 +222,78 @@ describe('turn cards view', () => {
   it('stays empty when the toolview card is already in view', () => {
     expect(render(false, cards)).toEqual([])
     expect(render(true, [])).toEqual([])
+  })
+})
+
+describe('turn tail beside an opened fold', () => {
+  beforeAll(() => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
+  })
+
+  /** Stand-in for the settled toolview box of one call. */
+  function ToolviewBox({ callId }: { callId: string }) {
+    const ref = useRef<HTMLDivElement>(null)
+    useReportShown(ref, callId)
+    return <div ref={ref} />
+  }
+
+  it('drops the tail copy while the toolview card is on screen, and brings it back when the fold closes', () => {
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      disconnect() {}
+    })
+    // jsdom has no layout; the host folds with hidden="until-found", which keeps the box's size.
+    vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(() => [{}] as never)
+    const cards = [
+      { callId: 'a', seq: 3, meta: meta('viz/a.html', 'Arch') },
+      { callId: 'b', seq: 4, meta: meta('viz/b.html', 'Flow') },
+    ]
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const Entry = TurnCards as unknown as ComponentType<Record<string, unknown>>
+    const tailTitles = () => [...host.querySelectorAll<HTMLIFrameElement>('[data-tail] iframe')].map(frame => frame.title)
+    act(() => {
+      root.render(
+        <>
+          <div data-fold><ToolviewBox callId="a" /></div>
+          <div data-tail><Entry turn={turnWith(cards)} seq={10} useVisualizeFolds={<S,>(pick: (value: boolean) => S) => pick(true)} /></div>
+        </>,
+      )
+    })
+    expect(tailTitles()).toEqual(['Flow'])
+
+    const fold = host.querySelector('[data-fold]')!
+    // MutationObserver delivers on a microtask.
+    return (async () => {
+      await act(async () => { fold.setAttribute('hidden', 'until-found') })
+      expect(tailTitles()).toEqual(['Arch', 'Flow'])
+      await act(async () => { fold.removeAttribute('hidden') })
+      expect(tailTitles()).toEqual(['Flow'])
+      act(() => { root.unmount() })
+    })()
+  })
+
+  it('keeps the tail copy where layout cannot be observed', () => {
+    vi.stubGlobal('ResizeObserver', undefined)
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const Entry = TurnCards as unknown as ComponentType<Record<string, unknown>>
+    act(() => {
+      root.render(
+        <>
+          <ToolviewBox callId="a" />
+          <Entry turn={turnWith([{ callId: 'a', seq: 3, meta: meta('viz/a.html', 'Arch') }])} seq={10} useVisualizeFolds={<S,>(pick: (value: boolean) => S) => pick(true)} />
+        </>,
+      )
+    })
+    expect([...host.querySelectorAll('iframe')].map(frame => frame.title)).toEqual(['Arch'])
+    act(() => { root.unmount() })
   })
 })
