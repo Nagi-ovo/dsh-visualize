@@ -140,14 +140,9 @@ export function openInWindow(meta: VisualizeMeta, callId: string, stateKey?: str
 /**
  * Whether this browser can open a card in its own tab: an embedding host may
  * strip `window.open` or Blob URLs, and a page card then renders in place.
- * DSH Desktop keeps both APIs but denies every Blob URL it is asked to open,
- * so it is recognised by the `data-platform` mark only its preload sets. The
- * result of `window.open` cannot decide this: `noopener` makes it null even
- * when the tab opens.
- * @returns true when a tab can open.
+ * @returns true when both are available.
  */
 function canOpenWindow(): boolean {
-  if (document.documentElement.dataset.platform !== undefined) return false
   return typeof window.open === 'function' && typeof URL.createObjectURL === 'function'
 }
 
@@ -392,17 +387,15 @@ export function Frame({ meta: persisted, callId, prompt, stateKey }: FrameProps)
       <div style={headerStyle} title={meta.path === '' ? meta.title : meta.path}>
         <span style={titleStyle}>{meta.title}</span>
         {meta.path !== '' && <span style={pathStyle}>{meta.path}</span>}
-        {canOpenWindow() && (
-          <button
-            type="button"
-            style={openStyle}
-            aria-label={label}
-            title={label}
-            onClick={() => openInWindow(meta, callId, stateKey)}
-          >
-            <OpenIcon />
-          </button>
-        )}
+        <button
+          type="button"
+          style={openStyle}
+          aria-label={label}
+          title={label}
+          onClick={() => openInWindow(meta, callId, stateKey)}
+        >
+          <OpenIcon />
+        </button>
       </div>
       <SizedFrame meta={meta} callId={callId} prompt={prompt} stateKey={stateKey} />
     </div>

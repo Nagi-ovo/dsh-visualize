@@ -22,7 +22,7 @@
 
 **桌面端**：打开侧边栏的「插件」→「添加插件」，填入 `@nagi-ovo/dsh-visualize`，然后重启 DSH。也可以运行 `dsh plugin --profile desktop add @nagi-ovo/dsh-visualize`。
 
-桌面端不能打开新窗口，卡片和页面都直接显示在对话里。
+已知问题：桌面端点「在新窗口打开」没有反应，页面卡片的「打开页面」也一样，请点「在对话中展开」查看。
 
 **Web**：用 npm 装到 `web` profile：
 
